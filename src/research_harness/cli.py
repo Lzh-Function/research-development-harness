@@ -34,6 +34,7 @@ from .github import GitHubIssue
 from .managed import has_block
 from .records import (
     DECISION_STATUSES,
+    RECORD_KINDS,
     GATE_NAMES,
     GATE_OUTCOMES,
     RISK_LEVELS,
@@ -475,6 +476,91 @@ def cmd_resume(args: argparse.Namespace) -> int:
     return 0
 
 
+def _matches(entry: Any, args: argparse.Namespace) -> bool:
+    """Filter one timeline entry. Pure predicate — no judgement, just fields."""
+    if args.kind and entry.kind not in args.kind:
+        return False
+    if args.gate and (entry.gate or "") not in args.gate:
+        return False
+    if args.outcome and (entry.outcome or "") not in args.outcome:
+        return False
+    if args.status and (entry.status or "") not in args.status:
+        return False
+    if args.since and entry.at < args.since:
+        return False
+    if args.until and entry.at[: len(args.until)] > args.until:
+        return False
+    if args.grep:
+        haystack = f"{entry.headline}\n{entry.body}\n{entry.issue_title}".lower()
+        if args.grep.lower() not in haystack:
+            return False
+    return True
+
+
+def cmd_log(args: argparse.Namespace) -> int:
+    """Cross-issue research history.
+
+    ``rh status`` and ``rh resume`` answer "what is this work unit"; this
+    answers "what has this project learned", which otherwise only exists as a
+    GitHub search.
+    """
+    session = make_session(args)
+    entries = session.timeline(
+        issues=args.issue or None,
+        state=args.state,
+        limit_issues=args.limit_issues,
+        include_work=not args.no_work,
+    )
+    selected = [entry for entry in entries if _matches(entry, args)]
+    if args.reverse:
+        selected.reverse()
+    truncated = False
+    if args.limit and len(selected) > args.limit:
+        selected = selected[: args.limit]
+        truncated = True
+
+    counts: dict[str, int] = {}
+    for entry in selected:
+        counts[entry.kind] = counts.get(entry.kind, 0) + 1
+
+    if args.json:
+        emit_json(
+            {
+                "entries": [entry.to_dict() for entry in selected],
+                "counts": counts,
+                "total_matched": len([e for e in entries if _matches(e, args)]),
+                "truncated": truncated,
+            }
+        )
+        return 0
+
+    if not selected:
+        emit("no records matched")
+        return 0
+
+    last_issue: int | None = None
+    for entry in selected:
+        if entry.issue != last_issue:
+            if last_issue is not None:
+                emit("")
+            suffix = f"  [{entry.issue_state.lower()}]" if entry.issue_state else ""
+            emit(f"#{entry.issue}  {entry.issue_title or '(untitled)'}{suffix}")
+        label = f"{entry.kind} {entry.label}".strip()
+        emit(f"  {entry.date}  {label:<26}{entry.headline}")
+        if args.full and entry.body:
+            emit("")
+            for line in entry.body.splitlines():
+                emit(f"      {line}")
+            emit("")
+        last_issue = entry.issue
+    emit("")
+    summary = ", ".join(f"{kind} {count}" for kind, count in sorted(counts.items()))
+    emit(f"{len(selected)} entries  ({summary})")
+    if truncated:
+        emit(f"(--limit {args.limit} applied; pass --limit 0 for all)")
+    return 0
+
+
 def cmd_issue_create(args: argparse.Namespace) -> int:
     session = make_session(args)
     marker = WorkMarker(
@@ -817,6 +903,22 @@ def build_parser() -> argparse.ArgumentParser:
     add("context", cmd_context, "current repository/work context")
     add("status", cmd_status, "derived state of the current work unit")
     add("resume", cmd_resume, "durable state needed to resume work in a fresh session")
+
+    log_parser = add("log", cmd_log, "cross-issue history of durable records")
+    log_parser.add_argument("--kind", action="append", choices=("work", *RECORD_KINDS), help="repeatable")
+    log_parser.add_argument("--gate", action="append", choices=GATE_NAMES, help="repeatable")
+    log_parser.add_argument("--outcome", action="append", choices=GATE_OUTCOMES, help="repeatable")
+    log_parser.add_argument("--status", action="append", choices=DECISION_STATUSES, help="repeatable")
+    log_parser.add_argument("--issue", action="append", type=int, help="restrict to these Work Issues")
+    log_parser.add_argument("--since", help="ISO date or prefix, e.g. 2026-06 or 2026-06-01")
+    log_parser.add_argument("--until", help="ISO date or prefix (inclusive)")
+    log_parser.add_argument("--grep", help="substring match on headline, body and issue title")
+    log_parser.add_argument("--state", default="all", choices=("open", "closed", "all"), help="Work Issue state")
+    log_parser.add_argument("--limit", type=int, default=50, help="max entries (0 for all)")
+    log_parser.add_argument("--limit-issues", type=int, default=100, help="max Work Issues to scan")
+    log_parser.add_argument("--no-work", action="store_true", help="omit work-unit opening events")
+    log_parser.add_argument("--full", action="store_true", help="print each record body in full")
+    log_parser.add_argument("--reverse", action="store_true", help="oldest first")
 
     adopt_parser = add("adopt", cmd_adopt, "vendor RDH into a target research repository", dry_run=True)
     adopt_parser.add_argument("target", help="path to the target research repository")

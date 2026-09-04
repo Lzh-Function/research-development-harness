@@ -106,6 +106,7 @@ class GitHubIssue:
     state: str = "OPEN"
     url: str = ""
     labels: list[str] = field(default_factory=list)
+    created_at: str = ""
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> "GitHubIssue":
@@ -118,6 +119,7 @@ class GitHubIssue:
             state=str(data.get("state", "OPEN")).upper(),
             url=str(data.get("url") or data.get("html_url") or ""),
             labels=[n for n in names if n],
+            created_at=str(data.get("createdAt") or data.get("created_at") or ""),
         )
 
 
@@ -271,8 +273,20 @@ class GitHubClient:
             raise GitHubError(f"unexpected issue payload for #{number}")
         return GitHubIssue.from_json(data)
 
-    def issue_list(self, *, state: str = "open", limit: int = 50, label: str | None = None) -> list[GitHubIssue]:
-        args = ["issue", "list", "--state", state, "--limit", str(limit), "--json", "number,title,state,url,labels"]
+    def issue_list(
+        self,
+        *,
+        state: str = "open",
+        limit: int = 50,
+        label: str | None = None,
+        with_body: bool = False,
+    ) -> list[GitHubIssue]:
+        fields = "number,title,state,url,labels,createdAt"
+        if with_body:
+            # Needed to tell Work Issues from ordinary ones: the rh:work marker
+            # lives in the body.
+            fields += ",body"
+        args = ["issue", "list", "--state", state, "--limit", str(limit), "--json", fields]
         if label:
             args.extend(["--label", label])
         data = self.json(args)

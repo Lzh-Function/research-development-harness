@@ -323,6 +323,42 @@ def sections(markdown: str) -> dict[str, str]:
     return out
 
 
+#: Section read first when summarising each record kind in a timeline.
+HEADLINE_SECTIONS: dict[str, tuple[str, ...]] = {
+    "checkpoint": ("Next Action", "Current State", "Done"),
+    "decision": ("Decision", "Proposed Change", "Trigger"),
+    "result": ("Observation", "Supports", "Question"),
+    # The outcome is already shown in the timeline label, so lead with what
+    # the gate actually taught: a repaired misconception is the useful part.
+    "gate": ("Misconceptions Repaired", "Validated Concepts", "Unresolved"),
+}
+
+
+def headline(record: "Record", *, limit: int = 96) -> str:
+    """One line summarising a record, for cross-issue listings.
+
+    Prefers the section that carries the point of that record kind; falls back
+    to the first non-heading line so an off-template record still shows
+    something rather than nothing.
+    """
+    for name in HEADLINE_SECTIONS.get(record.kind, ()):
+        text = extract_section(record.body, name)
+        if text:
+            for line in text.splitlines():
+                stripped = line.strip().lstrip("-*• ").strip()
+                if stripped and not stripped.startswith(("<!--", "|", "#")):
+                    return stripped if len(stripped) <= limit else stripped[: limit - 1] + "…"
+    echoed = {value.lower() for value in (record.outcome, record.status) if value}
+    for line in (record.body or "").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", "<!--", "|")):
+            continue
+        if stripped.lower() in echoed:
+            continue  # the outcome is already shown next to the record kind
+        return stripped if len(stripped) <= limit else stripped[: limit - 1] + "…"
+    return ""
+
+
 def latest(records: list[Record], kind: str | None = None) -> Record | None:
     """Most recent record (by ``created_at``, ties broken by list order)."""
     pool = [r for r in records if kind is None or r.kind == kind]

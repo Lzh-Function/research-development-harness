@@ -26,6 +26,12 @@ This project follows semantic versioning for `runtime_version`,
   it), the Knowledge Gate blocking and then releasing `READY_TO_MERGE`, and
   self-containment of an adopted repository including a relocated copy.
 
+- `rh log` — cross-issue research history. Filters by record kind, gate,
+  outcome, decision status, issue, date range and free text; `--full` prints
+  record bodies; works offline from the local cache. Answers "what has this
+  project learned", which `rh status` and `rh resume` (single work unit)
+  could not.
+
 ### Fixed during implementation
 - `READY_TO_MERGE` is reachable only from a declared `--phase review`
   checkpoint; previously gate-free low-risk work reached it the moment work

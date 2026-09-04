@@ -25,9 +25,77 @@ from .git import GitRepo, parse_github_remote
 from .github import GitHubClient, GitHubIssue, GitHubPR
 from .outbox import Outbox
 from .proc import CommandRunner, SubprocessRunner
-from .records import Record, WorkMarker
+from .records import Record, WorkMarker, extract_section, headline, strip_markers
 from .state import LinkStore, WorkLink, issue_from_branch
 from .util import atomic_write, iso_timestamp
+
+
+@dataclass
+class TimelineEntry:
+    """One dated event in the cross-issue research history."""
+
+    at: str
+    issue: int
+    issue_title: str
+    kind: str
+    label: str = ""
+    headline: str = ""
+    url: str | None = None
+    record_id: str | None = None
+    outcome: str | None = None
+    status: str | None = None
+    gate: str | None = None
+    head: str | None = None
+    body: str = ""
+    issue_state: str = ""
+
+    @property
+    def date(self) -> str:
+        return self.at[:10]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "at": self.at,
+            "issue": self.issue,
+            "issue_title": self.issue_title,
+            "issue_state": self.issue_state,
+            "kind": self.kind,
+            "label": self.label,
+            "headline": self.headline,
+            "outcome": self.outcome,
+            "status": self.status,
+            "gate": self.gate,
+            "head": self.head,
+            "record_id": self.record_id,
+            "url": self.url,
+        }
+
+
+def _work_headline(body: str, *, limit: int = 96) -> str:
+    """Opening line for a Work Issue: its stated purpose, not its first heading."""
+    for name in ("Purpose", "Research Question"):
+        text = extract_section(body, name)
+        if text:
+            for line in text.splitlines():
+                stripped = line.strip().lstrip("-*• ").strip()
+                if stripped and not stripped.startswith(("<!--", "|", "#")):
+                    return stripped if len(stripped) <= limit else stripped[: limit - 1] + "…"
+    for line in strip_markers(body or "").splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith(("#", "<!--", "|")):
+            return stripped if len(stripped) <= limit else stripped[: limit - 1] + "…"
+    return "work unit opened"
+
+
+def _record_label(record: Record) -> str:
+    if record.kind == "gate":
+        return f"{record.gate or '?'} → {record.outcome or '?'}"
+    if record.kind == "decision":
+        return record.status or "proposed"
+    if record.kind == "checkpoint":
+        phase = record.extra.get("phase")
+        return str(phase) if isinstance(phase, str) else "implementing"
+    return ""
 
 
 @dataclass
@@ -257,6 +325,107 @@ class Session:
         if from_github:
             self._records_cache[issue] = records
         return records, from_github
+
+    # ------------------------------------------------------- cross-issue view
+
+    def work_issues(self, *, state: str = "all", limit: int = 100) -> list[tuple[GitHubIssue, WorkMarker]]:
+        """Every Work Issue in the repository, newest first.
+
+        A Work Issue is one carrying an ``rh:work`` marker; ordinary issues in
+        the same repository are ignored rather than guessed at. Offline, this
+        falls back to whatever the local cache and branch links know about.
+        """
+        found: dict[int, tuple[GitHubIssue, WorkMarker]] = {}
+        if not self.offline:
+            try:
+                for issue in self.github.issue_list(state=state, limit=limit, with_body=True):
+                    marker = WorkMarker.parse(issue.body)
+                    if marker is not None:
+                        found[issue.number] = (issue, marker)
+            except HarnessError:
+                pass
+        if not found:
+            for number in self.cached_issue_numbers():
+                issue = self._cached_issue(number)
+                if issue is None:
+                    continue
+                marker = WorkMarker.parse(issue.body) or WorkMarker()
+                found[number] = (issue, marker)
+            for link in self.links.all():
+                if link.issue not in found:
+                    found[link.issue] = (
+                        GitHubIssue(number=link.issue, title=link.title),
+                        WorkMarker(kind=link.kind, risk=link.risk, evidence_required=link.evidence_required),
+                    )
+        return sorted(found.values(), key=lambda pair: pair[0].number, reverse=True)
+
+    def cached_issue_numbers(self) -> list[int]:
+        directory = self.state_dir / "cache"
+        if not directory.exists():
+            return []
+        numbers: list[int] = []
+        for path in directory.glob("issue-*.json"):
+            stem = path.stem.removeprefix("issue-")
+            if stem.isdigit():
+                numbers.append(int(stem))
+        return sorted(numbers)
+
+    def timeline(
+        self,
+        *,
+        issues: list[int] | None = None,
+        state: str = "all",
+        limit_issues: int = 100,
+        include_work: bool = True,
+    ) -> list["TimelineEntry"]:
+        """Every durable record across Work Issues, newest first."""
+        entries: list[TimelineEntry] = []
+        pairs = self.work_issues(state=state, limit=limit_issues)
+        if issues:
+            wanted = set(issues)
+            pairs = [pair for pair in pairs if pair[0].number in wanted]
+            for number in wanted - {pair[0].number for pair in pairs}:
+                issue_obj = self.issue(number)
+                if issue_obj is not None:
+                    pairs.append((issue_obj, WorkMarker.parse(issue_obj.body) or WorkMarker()))
+        for issue_obj, marker in pairs:
+            records, from_github = self.records(issue_obj.number, refresh=not self.offline)
+            if from_github:
+                self.cache_records(issue_obj.number, records, issue_obj=issue_obj)
+            if include_work and issue_obj.created_at:
+                entries.append(
+                    TimelineEntry(
+                        at=issue_obj.created_at,
+                        issue=issue_obj.number,
+                        issue_title=issue_obj.title,
+                        kind="work",
+                        label=f"{marker.kind}/{marker.risk}",
+                        headline=_work_headline(issue_obj.body),
+                        url=issue_obj.url,
+                        issue_state=issue_obj.state,
+                    )
+                )
+            for record in records:
+                entries.append(
+                    TimelineEntry(
+                        at=record.created_at,
+                        issue=issue_obj.number,
+                        issue_title=issue_obj.title,
+                        kind=record.kind,
+                        label=_record_label(record),
+                        headline=headline(record),
+                        url=record.url,
+                        record_id=record.id,
+                        outcome=record.outcome,
+                        status=record.status,
+                        gate=record.gate,
+                        head=record.head,
+                        body=record.body,
+                        issue_state=issue_obj.state,
+                    )
+                )
+        entries.sort(key=lambda entry: entry.at, reverse=True)
+        return entries
 
     def issue(self, number: int) -> GitHubIssue | None:
         if self.offline:

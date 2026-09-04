@@ -595,8 +595,35 @@ Gate A / B / C / D は、それぞれ `rh-scope` / Agent 側の自発的停止 /
 |---|---|
 | `rh status` | 「今どうなってる？」と思ったとき。まず最初にこれ |
 | `rh resume` | session 開始時、AI を切り替えた後、状況が分からなくなったとき |
+| `rh log` | 「この研究、これまでに何が分かった？」と俯瞰したいとき |
 | `rh record checkpoint` | 作業の区切り、AI 切替前、長時間実験の前後、中断時、context 圧縮前 |
 | `rh sync` | offline で作業した後、login ノードに戻ったとき |
+
+`rh status` / `rh resume` が **1 つの作業単位** を答えるのに対し、`rh log` は **研究全体** を答えます。
+
+```bash
+rh log                          # 全 Work Issue の記録を時系列で
+rh log --kind result            # これまでに出た結果だけ
+rh log --kind result --since 2026-06
+rh log --kind gate --outcome repaired    # 誤解を修復した箇所だけ
+rh log --grep leakage --full    # 該当する record を全文で
+```
+
+```
+#3  MLP probe follow-up  [open]
+  2026-09-04  result                    layer 5 で MLP probe が AUROC 0.81
+  2026-09-04  checkpoint validating     2 層 MLP probe を 5 seed で回す
+  2026-09-04  gate design → passed      容量を上げた probe で非線形保持を検出できる
+
+#2  Scaffold split leakage audit  [open]
+  2026-09-04  gate evidence → passed    3.1% は結論を覆さない規模である
+  2026-09-04  result                    Bemis-Murcko で 3.1% の骨格が train/test 両方に出現
+  2026-09-04  gate design → overridden  探索的のため研究者判断で skip
+
+16 entries  (checkpoint 2, decision 1, gate 6, result 3, work 4)
+```
+
+論文を書き始めるとき、共同研究者に経緯を説明するとき、`--kind result` で「支持されなかったものも含めた全結果」を出せるのが効きます。`--offline` でも local cache から動きます。
 
 ### 作業単位のライフサイクル
 
@@ -618,6 +645,7 @@ Gate A / B / C / D は、それぞれ `rh-scope` / Agent 側の自発的停止 /
 | `rh doctor` | 導入直後、様子がおかしいとき。read-only |
 | `rh audit` | 既存 repository を RDH に載せるとき。分類はしない inventory |
 | `rh context` | Agent が最初に叩く。repo / branch / HEAD / Issue / PR / outbox |
+| `rh log` | 研究全体の記録を横断で読む。read-only |
 | `rh adopt <path>` | 研究 repository に導入する（distribution repo から） |
 | `rh upgrade <path>` | 新しい版を再導入する。local 変更は保護される |
 | `rh version` | version 確認 |
@@ -715,7 +743,7 @@ branch を分けてください（作業 A → branch A、作業 B → branch B�
 ./run-tests -q
 ```
 
-241 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
+270 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
 
 - authoritative な設計文書: [docs/SPEC.md](docs/SPEC.md)
 - 実装上の判断と意図的な差分: [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)

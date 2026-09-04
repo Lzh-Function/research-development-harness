@@ -116,6 +116,17 @@ and given its identity through environment variables, so the environment
 itself is quiet — there is an explicit test asserting that, plus three canary
 tests proving the detector notices additions, modifications and deletions.
 
+**Cross-issue history (`rh log`).** `rh status` and `rh resume` are
+work-unit scoped; nothing answered "what has this project learned" without a
+GitHub search. `rh log` walks every issue carrying an `rh:work` marker,
+collects its records, and sorts them into one timeline. Ordinary issues in the
+same repository are skipped rather than guessed at. Each entry gets a
+one-line headline drawn from the section that carries the point of that record
+kind (`Observation` for a result, `Decision`, `Next Action`, `Misconceptions
+Repaired`), never echoing an outcome already shown beside the kind. It is
+read-only with respect to the working tree and GitHub, but it does refresh
+`.git/research-harness/cache` so that a later `--offline` run still works.
+
 ## Platform assumptions, verified
 
 Checked against official documentation in September 2026 rather than assumed

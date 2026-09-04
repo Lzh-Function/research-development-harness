@@ -13,6 +13,7 @@ from research_harness.records import (  # noqa: E402
     Record,
     WorkMarker,
     extract_section,
+    headline,
     latest,
     parse_marker,
     parse_record,
@@ -118,6 +119,42 @@ class WorkMarkerTests(unittest.TestCase):
 
     def test_absent_marker(self):
         self.assertIsNone(WorkMarker.parse("An ordinary issue body."))
+
+
+class HeadlineTests(unittest.TestCase):
+    """One-line summaries used by `rh log`."""
+
+    def test_prefers_the_section_that_carries_the_point(self):
+        cases = [
+            (Record(kind="result", body="### Question\nq\n\n### Observation\nAUROC 0.52"), "AUROC 0.52"),
+            (Record(kind="decision", status="accepted", body="### Trigger\nt\n\n### Decision\n除外する"), "除外する"),
+            (Record(kind="checkpoint", body="### Done\nd\n\n### Next Action\nsweep を投入"), "sweep を投入"),
+            (Record(kind="gate", gate="design", outcome="passed",
+                    body="### Validated Concepts\n- v\n\n### Misconceptions Repaired\n- 混同を修復"), "混同を修復"),
+        ]
+        for record, expected in cases:
+            with self.subTest(kind=record.kind):
+                self.assertEqual(headline(record), expected)
+
+    def test_falls_back_to_the_first_prose_line(self):
+        self.assertEqual(headline(Record(kind="decision", body="## Title\n\nfree prose")), "free prose")
+
+    def test_never_echoes_the_outcome_it_sits_next_to(self):
+        record = Record(kind="gate", gate="design", outcome="overridden",
+                        body="### Outcome\noverridden\n\n探索的のため skip")
+        self.assertEqual(headline(record), "探索的のため skip")
+
+    def test_strips_list_bullets_and_skips_tables(self):
+        record = Record(kind="result", body="### Observation\n| a | b |\n- 実測値 0.52")
+        self.assertEqual(headline(record), "実測値 0.52")
+
+    def test_truncates_long_lines(self):
+        record = Record(kind="result", body="### Observation\n" + "あ" * 200)
+        self.assertEqual(len(headline(record, limit=40)), 40)
+        self.assertTrue(headline(record, limit=40).endswith("…"))
+
+    def test_empty_body_is_empty_not_an_error(self):
+        self.assertEqual(headline(Record(kind="checkpoint", body="")), "")
 
 
 class SectionTests(unittest.TestCase):

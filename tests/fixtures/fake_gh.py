@@ -65,6 +65,13 @@ def maybe_fail(state):
     raise SystemExit(1)
 
 
+def next_timestamp(state):
+    """Monotonic ISO timestamps so ordering in listings is deterministic."""
+    seq = int(state.get("clock", 0)) + 1
+    state["clock"] = seq
+    return "2026-09-%02dT%02d:00:00Z" % (1 + (seq // 24) % 28, seq % 24)
+
+
 def take(args, flag):
     """Return the value following ``flag`` and remove both from ``args``."""
     if flag in args:
@@ -161,6 +168,7 @@ def issue_command(state, args):
             "labels": [{"name": name} for name in labels],
             "comments": [],
             "url": issue_url(state, number),
+            "createdAt": next_timestamp(state),
         }
         save(state)
         out(issue_url(state, number))
@@ -179,24 +187,21 @@ def issue_command(state, args):
 
     if action == "list":
         wanted = (take(args, "--state") or "open").upper()
-        take(args, "--limit")
+        limit = take(args, "--limit")
         label = take(args, "--label")
-        take(args, "--json")
+        # Real `gh` returns exactly the fields requested via --json, so the
+        # fake must too: callers rely on asking for `body` to find markers.
+        fields = [f for f in (take(args, "--json") or "").split(",") if f]
         items = []
         for issue in state["issues"].values():
             if wanted != "ALL" and issue["state"] != wanted:
                 continue
             if label and label not in [lab["name"] for lab in issue.get("labels", [])]:
                 continue
-            items.append(
-                {
-                    "number": issue["number"],
-                    "title": issue["title"],
-                    "state": issue["state"],
-                    "url": issue["url"],
-                    "labels": issue.get("labels", []),
-                }
-            )
+            items.append({key: issue.get(key) for key in fields} if fields else dict(issue))
+        items.sort(key=lambda item: item.get("number") or 0, reverse=True)
+        if limit:
+            items = items[: int(limit)]
         out(json.dumps(items))
         return 0
 

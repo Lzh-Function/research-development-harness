@@ -22,7 +22,7 @@ Every requirement in SPEC 64 (Mandatory Acceptance Scenarios) and SPEC 70
 | 9 | `READY_TO_MERGE` reachable | `integration.RecordAndStateTests.test_state_advances_through_the_flow` |
 | 10 | The harness never merges | `integration.NoDestructiveOperationsTests`, `e2e.ScenarioH.test_harness_never_merges_even_when_ready`, and `gh pr merge` exits 99 in the fake `gh` |
 | 11 | Outbox + idempotent sync on GitHub failure | `integration.OfflineTests` (9 tests), `unit.test_outbox` |
-| 12 | Main behaviours covered by automated tests | 241 tests, standard library only |
+| 12 | Main behaviours covered by automated tests | 270 tests, standard library only |
 
 ## Mandatory Acceptance Scenarios (SPEC 64)
 
@@ -59,6 +59,13 @@ creation, PR read/update, pagination, auth failure, network failure, retry,
 duplicate UUID prevention: `unit.test_github_adapter` (24 tests) against a
 fake runner, and `integration.OfflineTests` against the fake `gh` executable.
 No automated test requires a GitHub account or a network.
+
+## Beyond the spec
+
+`rh log` (cross-issue research history) is an addition, not a SPEC 33
+requirement. It is read-only and additive: no existing command, record schema
+or deployment contract changed. Covered by
+`integration.test_log` (23 tests) and `unit.test_records.HeadlineTests`.
 
 ## Not covered in v0.1
 
