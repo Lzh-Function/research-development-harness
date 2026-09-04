@@ -117,6 +117,17 @@ class SkillBundleTests(unittest.TestCase):
                 codex = (BUNDLE / "codex-skills" / name / "SKILL.md").read_text(encoding="utf-8")
                 self.assertEqual(claude, codex, "both vendors must describe the same behaviour")
 
+    def test_cross_issue_history_has_an_agent_side_entry_point(self):
+        """`rh log` must be reachable from a workflow, not researcher-only."""
+        workflow = (BUNDLE / "workflows" / "status.md").read_text(encoding="utf-8")
+        self.assertIn('"$RH" log', workflow)
+        self.assertIn("--kind result", workflow)
+        description = parse_frontmatter(
+            (BUNDLE / "claude-skills" / "rh-status" / "SKILL.md").read_text(encoding="utf-8")
+        )["description"]
+        self.assertIn("rh log", description)
+        self.assertIn("project", description)
+
     def test_managed_instructions_stay_short_and_point_at_the_canon(self):
         text = (BUNDLE / "managed-instructions.md").read_text(encoding="utf-8")
         self.assertLess(len(text), 2000, "AGENTS.md/CLAUDE.md must not carry the whole workflow")

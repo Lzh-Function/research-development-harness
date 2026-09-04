@@ -555,7 +555,8 @@ def cmd_log(args: argparse.Namespace) -> int:
         last_issue = entry.issue
     emit("")
     summary = ", ".join(f"{kind} {count}" for kind, count in sorted(counts.items()))
-    emit(f"{len(selected)} entries  ({summary})")
+    noun = "entry" if len(selected) == 1 else "entries"
+    emit(f"{len(selected)} {noun}  ({summary})")
     if truncated:
         emit(f"(--limit {args.limit} applied; pass --limit 0 for all)")
     return 0

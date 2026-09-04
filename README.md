@@ -587,6 +587,51 @@ Gate A / B / C / D は、それぞれ `rh-scope` / Agent 側の自発的停止 /
 
 ---
 
+### 一日をまたぐとき — 研究全体を振り返る
+
+ここまでは 1 つの作業単位の話でした。**週明け、論文を書き始めるとき、共同研究者に経緯を説明するとき**に効くのが `rh log` です。
+
+```
+👤 この 3 ヶ月で出た結果、支持されなかったものも含めて全部見せて
+```
+
+```
+$ rh log --kind result --since 2026-06
+
+#3  MLP probe follow-up  [open]
+  2026-09-04  result                    layer 5 で MLP probe が AUROC 0.81
+
+#2  Scaffold split leakage audit  [open]
+  2026-09-04  result                    Bemis-Murcko で 3.1% の骨格が train/test 両方に出現
+
+#1  Chirality probe across message passing layers  [open]
+  2026-09-04  result                    layer 0 で AUROC 0.94、layer 5 で 0.52
+
+3 entries  (result 3)
+```
+
+よく使う切り口:
+
+```bash
+rh log --kind result                       # 出た結果を全部（negative も同じ形で残る）
+rh log --kind decision --status accepted   # 今の intent が何の上に立っているか
+rh log --kind gate --outcome repaired      # 理解が修復された箇所＝つまずきやすい概念
+rh log --grep leakage --full               # 特定の話題を全文で
+rh log --issue 1                           # 1 つの作業単位の全履歴
+```
+
+`rh log` は **`rh status` / `rh resume` と対になる道具**です。`resume` が 1 つの作業単位を深く復元するのに対し、`log` は研究全体を広く見ます。「この問い、前に誰かが答えてなかったか」「同じことを二度やろうとしていないか」を確かめるのにも使えます。
+
+Agent 側からも `rh-status` Skill 経由で到達できます。
+
+```
+👤 /rh-status この研究、これまでに何が分かってる？
+```
+
+read-only で、`--offline` でも local cache から動きます。
+
+---
+
 ## 6. コマンド一覧と使いどころ
 
 ### 日常的に使うもの
@@ -666,10 +711,12 @@ rh log --grep leakage --full    # 該当する record を全文で
 | `rh-start` | 明示推奨 | `work start` | — |
 | `rh-checkpoint` | 明示推奨 | `record checkpoint` | — |
 | `rh-resume` | **明示必須に近い** | `context`、`status`、`resume` | — |
-| `rh-status` | Agent 任せで可 | `status` | — |
+| `rh-status` | Agent 任せで可 | `status`、`log` | — |
 | `rh-decision` | **Agent 側から発火** | `record decision`、`record gate --gate deviation` | **B. Deviation** |
 | `rh-result` | 明示推奨 | `record result`、`record gate --gate evidence` | **C. Evidence** |
 | `rh-finish` | 明示推奨 | `ready`、`pr update`、`record gate --gate knowledge` | **D. Knowledge** |
+
+`rh log`（研究全体の横断ビュー）は研究者が直接叩くことが多いコマンドですが、`rh-status` の workflow に入口があるので、Agent に「これまでに何が分かってる？」と訊いても到達します。
 
 **4 つの Human Gate は、いずれも Skill の中で起きます。** Gate を開くために研究者が何かを打つ必要はありません。特に Deviation Gate は、研究者が何も言っていないときに Agent 側から止まるのが正常な動作です。
 
@@ -743,7 +790,7 @@ branch を分けてください（作業 A → branch A、作業 B → branch B�
 ./run-tests -q
 ```
 
-270 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
+272 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
 
 - authoritative な設計文書: [docs/SPEC.md](docs/SPEC.md)
 - 実装上の判断と意図的な差分: [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)

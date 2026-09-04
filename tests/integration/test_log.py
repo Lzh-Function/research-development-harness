@@ -159,6 +159,10 @@ class LogTests(LogTestCase):
         self.assertTrue(payload["truncated"])
         self.assertGreater(payload["total_matched"], 2)
 
+    def test_entry_count_is_pluralised(self):
+        self.assertIn("2 entries", self.rh(["log", "--kind", "result"], check=True).stdout)
+        self.assertIn("1 entry", self.rh(["log", "--kind", "decision"], check=True).stdout)
+
     def test_no_match_is_not_an_error(self):
         result = self.rh(["log", "--grep", "nothing here"], check=True)
         self.assertIn("no records matched", result.stdout)

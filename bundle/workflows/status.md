@@ -25,3 +25,27 @@ next recorded action.
 
 Report state to the researcher in plain language. Do not paste raw JSON at
 them unless they ask.
+
+## Zooming out to the whole project
+
+`rh status` is scoped to one work unit. When the question is about the
+project — what has been established so far, what was tried and did not work,
+where the researcher's understanding needed repair — use the cross-issue
+history instead:
+
+```bash
+"$RH" log                                  # every record, newest first
+"$RH" log --kind result                    # every result, including negative ones
+"$RH" log --kind result --since 2026-06
+"$RH" log --kind decision --status accepted   # what the current intent is built on
+"$RH" log --kind gate --outcome repaired   # where understanding needed repair
+"$RH" log --grep leakage --full
+```
+
+Reach for this when the researcher asks what the project has learned, when
+writing up results, when a new work unit might duplicate an old one, or when
+you need to know whether a question has already been answered. It is
+read-only and works offline from the local cache.
+
+Do not use it as a substitute for `rh resume` on the current work unit: `log`
+is breadth, `resume` is depth.

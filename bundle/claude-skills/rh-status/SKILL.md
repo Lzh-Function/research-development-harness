@@ -1,6 +1,6 @@
 ---
 name: rh-status
-description: Report the derived state of the current work unit: state, risk, Issue, PR, branch, latest checkpoint, changes since it, pending Human Gates and blockers. Use when asked where things stand, or before deciding what to do next.
+description: Report where work stands: the derived state of the current work unit (state, risk, Issue, PR, branch, latest checkpoint, changes since it, pending Human Gates, blockers), or the cross-issue history of the whole project via `rh log` — what has been established, what was tried and did not work, which decisions the current intent rests on. Use when asked where things stand, what the project has learned so far, whether a question was already answered, or before deciding what to do next.
 ---
 
 # RDH Status
