@@ -372,3 +372,43 @@ class NoDestructiveOperationsTests(LifecycleTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HumanOutputTests(LifecycleTestCase):
+    """Every command must render readable output, not only --json."""
+
+    def test_human_readable_output_for_the_whole_flow(self):
+        issue = self.create_issue(risk="medium", evidence=False)
+        checks = [
+            (["version"], "rh 0.1.0"),
+            (["context"], "repo_root"),
+            (["status"], "Derived State"),
+            (["resume"], "next action"),
+            (["audit"], "repository"),
+            (["doctor"], "worst severity"),
+        ]
+        for args, expected in checks:
+            with self.subTest(command=args[0]):
+                result = self.rh(args)
+                self.assertIn(expected, result.stdout)
+                self.assertEqual(result.stderr, "")
+
+        self.rh(["work", "link", str(issue)], check=True)
+        self.assertIn("Pending Gates       design", self.rh(["status"], check=True).stdout)
+        self.rh(["record", "gate", "--gate", "design", "--outcome", "passed", "--body", "### Outcome\npassed"], check=True)
+        start = self.rh(["work", "start", str(issue)], check=True)
+        self.assertIn("draft PR", start.stdout)
+        self.assertIn("recorded checkpoint", self.rh(["record", "checkpoint", "--body", "### Next Action\ngo"], check=True).stdout)
+        self.assertIn("NOT READY_TO_MERGE", self.rh(["ready"]).stdout)
+        self.assertIn("pending", self.rh(["sync"], check=True).stdout)
+
+    def test_untracked_status_renders_without_a_work_unit(self):
+        result = self.rh(["status"], check=True)
+        self.assertIn("Current Work        (none)", result.stdout)
+        self.assertIn("UNTRACKED", result.stdout)
+
+    def test_errors_go_to_stderr_with_a_hint(self):
+        result = self.rh(["record", "checkpoint", "--body", "x"])
+        self.assertEqual(result.stdout, "")
+        self.assertIn("rh: ", result.stderr)
+        self.assertIn("hint:", result.stderr)

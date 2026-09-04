@@ -242,3 +242,51 @@ class AuditTests(AdoptedRepoTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WorktreeTests(AdoptedRepoTestCase):
+    """RDH must work from a linked worktree, sharing one local state dir."""
+
+    def setUp(self):
+        super().setUp()
+        self.sandbox.git(self.repo, ["add", "-A"])
+        self.sandbox.git(self.repo, ["commit", "-q", "-m", "adopt harness"])
+        self.worktree = self.sandbox.base / "wt"
+        self.sandbox.git(self.repo, ["worktree", "add", "-q", "-b", "side", str(self.worktree)])
+
+    def run_in_worktree(self, args):
+        return json.loads(
+            self.sandbox.run(
+                [sys.executable, str(self.worktree / ".research-harness" / "bin" / "rh"), *args, "--json"],
+                cwd=self.worktree,
+                check=True,
+            ).stdout
+        )
+
+    def test_context_resolves_the_worktree_root(self):
+        payload = self.run_in_worktree(["context"])
+        self.assertEqual(payload["repo_root"], str(self.worktree))
+        self.assertEqual(payload["branch"], "side")
+
+    def test_local_state_is_shared_with_the_main_worktree(self):
+        """Links and the outbox live in the common git dir, not per-worktree."""
+        issue = self.start_work()
+        self.run_in_worktree(["status"])
+        shared = self.repo / ".git" / "research-harness" / "links"
+        self.assertTrue(shared.exists())
+        self.assertFalse((self.worktree / ".git").is_dir(), "a linked worktree has a .git file, not a directory")
+        payload = self.run_in_worktree(["record", "checkpoint", "--issue", str(issue), "--body", "### Next Action\nx"])
+        self.assertFalse(payload["queued"])
+
+    def test_audit_lists_the_worktree(self):
+        payload = self.rh_json(["audit"])
+        paths = [w["path"] for w in payload["worktrees"]]
+        self.assertTrue(any(str(self.worktree) in p for p in paths))
+
+    def test_adoption_did_not_disturb_the_worktree(self):
+        self.assertTrue((self.worktree / ".research-harness" / "bin" / "rh").exists())
+        result = self.sandbox.run(
+            [sys.executable, str(self.worktree / ".research-harness" / "bin" / "rh"), "doctor"],
+            cwd=self.worktree,
+        )
+        self.assertNotIn("ERROR", result.stdout)
