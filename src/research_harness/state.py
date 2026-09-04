@@ -277,9 +277,9 @@ def derive_state(
             return DerivedState("KNOWLEDGE_GATE", "implementation and evidence are complete; knowledge gate pending", pending, blockers)
         return DerivedState("READY_TO_MERGE", "all required gates passed; the researcher merges, not RDH", pending, blockers)
 
-    if not pending:
-        return DerivedState("READY_TO_MERGE", "all required gates passed; the researcher merges, not RDH", pending, blockers)
-
+    # Completion is declared (checkpoint --phase review), never inferred from
+    # the absence of pending gates: low-risk work requires no gates at all, and
+    # "no gate is outstanding" is not evidence that the work is finished.
     return DerivedState("IN_PROGRESS", "implementation is under way", pending, blockers)
 
 
