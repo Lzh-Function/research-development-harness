@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+"""Research Development Harness launcher.
+
+The identical script is used in two places and must work unchanged in both:
+
+    <distribution>/bin/rh              -> ../src/research_harness
+    <target>/.research-harness/bin/rh  -> ../runtime/research_harness
+
+No global installation, no PYTHONPATH setup, no virtualenv: the launcher
+finds the runtime next to itself. Byte-code writing is disabled so running
+the harness never leaves __pycache__ noise in a research repository.
+"""
+
+import os
+import sys
+
+sys.dont_write_bytecode = True
+
+MIN_PYTHON = (3, 11)
+
+
+def _fail(message):
+    sys.stderr.write("rh: %s\n" % message)
+    return 70
+
+
+def _locate_runtime():
+    here = os.path.dirname(os.path.realpath(__file__))
+    parent = os.path.dirname(here)
+    for name in ("runtime", "src"):
+        candidate = os.path.join(parent, name)
+        if os.path.isdir(os.path.join(candidate, "research_harness")):
+            return candidate
+    return None
+
+
+def main():
+    if sys.version_info < MIN_PYTHON:
+        return _fail(
+            "Python %d.%d+ is required (found %s)"
+            % (MIN_PYTHON[0], MIN_PYTHON[1], ".".join(str(p) for p in sys.version_info[:3]))
+        )
+    runtime = _locate_runtime()
+    if runtime is None:
+        return _fail(
+            "could not locate the research_harness runtime next to %s" % os.path.realpath(__file__)
+        )
+    if runtime not in sys.path:
+        sys.path.insert(0, runtime)
+    try:
+        from research_harness.cli import main as cli_main
+    except ImportError as exc:  # pragma: no cover - defensive
+        return _fail("could not import the research_harness runtime: %s" % exc)
+    return cli_main(sys.argv[1:])
+
+
+if __name__ == "__main__":
+    sys.exit(main())
