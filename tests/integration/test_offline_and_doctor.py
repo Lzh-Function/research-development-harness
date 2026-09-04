@@ -290,3 +290,40 @@ class WorktreeTests(AdoptedRepoTestCase):
             cwd=self.worktree,
         )
         self.assertNotIn("ERROR", result.stdout)
+
+
+class RuntimeOwnershipTests(AdoptedRepoTestCase):
+    """A vendored `rh` belongs to its own repository, wherever it is invoked."""
+
+    def setUp(self):
+        super().setUp()
+        self.other = self.sandbox.make_repo("unrelated")
+        self.sandbox.git(self.other, ["switch", "-q", "-c", "someone-elses-branch"])
+
+    def vendored(self, args, cwd):
+        return json.loads(
+            self.sandbox.run(
+                [sys.executable, str(self.repo / ".research-harness" / "bin" / "rh"), *args, "--json"],
+                cwd=cwd,
+                check=True,
+            ).stdout
+        )
+
+    def test_invoking_from_another_repository_still_reports_its_own(self):
+        payload = self.vendored(["context"], cwd=self.other)
+        self.assertEqual(payload["repo_root"], str(self.repo))
+        self.assertNotEqual(payload["branch"], "someone-elses-branch")
+
+    def test_explicit_repo_flag_still_wins(self):
+        payload = self.vendored(["--repo", str(self.other), "context"], cwd=self.repo)
+        self.assertEqual(payload["repo_root"], str(self.other))
+
+    def test_version_reports_the_installation_it_belongs_to(self):
+        payload = self.vendored(["version"], cwd=self.other)
+        self.assertIn("bundle_version", payload)
+        self.assertTrue(payload["runtime_path"].startswith(str(self.repo)))
+
+    def test_distribution_launcher_still_follows_the_working_directory(self):
+        """`./bin/rh` in the harness repo is not vendored and must not pin."""
+        payload = json.loads(self.sandbox.rh(["context", "--json"], cwd=self.other, check=True).stdout)
+        self.assertEqual(payload["repo_root"], str(self.other))

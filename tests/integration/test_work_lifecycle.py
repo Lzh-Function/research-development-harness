@@ -394,7 +394,7 @@ class HumanOutputTests(LifecycleTestCase):
                 self.assertEqual(result.stderr, "")
 
         self.rh(["work", "link", str(issue)], check=True)
-        self.assertIn("Pending Gates       design", self.rh(["status"], check=True).stdout)
+        self.assertIn("Pending Gates        design", self.rh(["status"], check=True).stdout)
         self.rh(["record", "gate", "--gate", "design", "--outcome", "passed", "--body", "### Outcome\npassed"], check=True)
         start = self.rh(["work", "start", str(issue)], check=True)
         self.assertIn("draft PR", start.stdout)
@@ -404,7 +404,7 @@ class HumanOutputTests(LifecycleTestCase):
 
     def test_untracked_status_renders_without_a_work_unit(self):
         result = self.rh(["status"], check=True)
-        self.assertIn("Current Work        (none)", result.stdout)
+        self.assertIn("Current Work         (none)", result.stdout)
         self.assertIn("UNTRACKED", result.stdout)
 
     def test_errors_go_to_stderr_with_a_hint(self):

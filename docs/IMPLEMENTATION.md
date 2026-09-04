@@ -68,6 +68,15 @@ installed file. `rh upgrade` uses it to distinguish "this file changed because
 the bundle changed" from "the researcher edited this file"; the latter is
 reported as a conflict and left alone unless `--force` is given.
 
+**Which repository a command acts on.** A vendored
+`.research-harness/bin/rh` pins itself to the repository it was vendored into,
+found by walking up from the runtime's own location to the `manifest.toml`
+beside it. Without that, invoking a target's `rh` from another directory
+silently reported on whatever repository contained the working directory —
+wrong branch, wrong HEAD, wrong work, no error. The distribution repository's
+`./bin/rh` is not vendored and still follows the working directory, and
+`--repo` overrides both.
+
 **Byte-code.** `bin/rh` sets `sys.dont_write_bytecode` before importing the
 runtime, so running the harness never leaves `__pycache__` in a research
 repository (and never makes the worktree look dirty).

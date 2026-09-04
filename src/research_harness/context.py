@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from . import RUNTIME_VERSION
-from .config import Config, Installation
+from .config import HARNESS_DIRNAME, MANIFEST_NAME, Config, Installation
 from .errors import GitHubError, HarnessError
 from .git import GitRepo, parse_github_remote
 from .github import GitHubClient, GitHubIssue, GitHubPR
@@ -87,7 +87,7 @@ class Session:
         offline: bool = False,
     ) -> None:
         self.runner: CommandRunner = runner or SubprocessRunner()
-        self.git = GitRepo.discover(root, self.runner)
+        self.git = GitRepo.discover(root if root is not None else vendored_repo_root(), self.runner)
         self.offline = offline
         self._gh_runner = gh_runner or self.runner
         self._repo_override = repo_override
@@ -327,6 +327,21 @@ def _record_from_dict(data: dict[str, Any]) -> Record | None:
         url=data.get("url"),
         author=data.get("author"),
     )
+
+
+def vendored_repo_root() -> Path | None:
+    """The repository this runtime was vendored into, if any.
+
+    A target's `.research-harness/bin/rh` belongs to that repository. Without
+    this, invoking it from another directory would silently report on whatever
+    repository happened to contain the working directory — the wrong branch,
+    the wrong HEAD, the wrong work. An explicit ``--repo`` still wins.
+    """
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if parent.name == HARNESS_DIRNAME and (parent / MANIFEST_NAME).exists():
+            return parent.parent
+    return None
 
 
 def env_flag(name: str) -> bool:

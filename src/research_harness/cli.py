@@ -398,23 +398,28 @@ def cmd_status(args: argparse.Namespace) -> int:
         return 0
     context = work["context"]
     state = work["state"]
-    emit(f"Current Work        {('#' + str(work['issue']['number']) + ' ' + (work['issue']['title'] or '')).strip() if work['issue'] else '(none)'}")
-    emit(f"Derived State       {state['state']}  — {state['reason']}")
-    emit(f"Risk                {work['risk'] or '-'} ({work['kind'] or '-'}{', evidence required' if work['evidence_required'] else ''})")
-    emit(f"Issue               {('#' + str(work['issue']['number'])) if work['issue'] else '-'}")
-    emit(f"PR                  {('#' + str(work['pr']['number'])) if work['pr'] else '-'}")
-    emit(f"Branch              {context['branch'] or '(detached)'}")
-    emit(f"HEAD                {context['head'] or '-'}")
+
+    def row(label: str, value: str) -> None:
+        emit(f"{label.ljust(21)}{value}")
+
+    issue = work["issue"]
+    row("Current Work", (f"#{issue['number']} {issue['title'] or ''}").strip() if issue else "(none)")
+    row("Derived State", f"{state['state']}  — {state['reason']}")
+    row("Risk", f"{work['risk'] or '-'} ({work['kind'] or '-'}{', evidence required' if work['evidence_required'] else ''})")
+    row("Issue", f"#{issue['number']}" if issue else "-")
+    row("PR", f"#{work['pr']['number']}" if work["pr"] else "-")
+    row("Branch", context["branch"] or "(detached)")
+    row("HEAD", context["head"] or "-")
     checkpoint = work["latest_checkpoint"]
-    emit(f"Latest Checkpoint   {checkpoint['created_at'] if checkpoint else '(none)'}")
-    emit(f"Changes Since       {len(work['changes_since_checkpoint'])} path(s), {len(work['commits_since_checkpoint'])} commit(s)")
-    emit(f"Pending Gates       {', '.join(work['pending_gates']) or '(none)'}")
-    emit(f"Blockers            {'; '.join(work['blockers']) or '(none)'}")
-    emit(f"Next Recorded Action{'  ' + (work['next_action'] or '(none)')}")
+    row("Latest Checkpoint", checkpoint["created_at"] if checkpoint else "(none)")
+    row("Changes Since", f"{len(work['changes_since_checkpoint'])} path(s), {len(work['commits_since_checkpoint'])} commit(s)")
+    row("Pending Gates", ", ".join(work["pending_gates"]) or "(none)")
+    row("Blockers", "; ".join(work["blockers"]) or "(none)")
+    row("Next Recorded Action", work["next_action"] or "(none)")
     if context["outbox_pending"]:
-        emit(f"Outbox              {context['outbox_pending']} pending — run `rh sync`")
+        row("Outbox", f"{context['outbox_pending']} pending — run `rh sync`")
     if work["records_source"] == "cache":
-        emit("Records             read from local cache (GitHub unavailable)")
+        row("Records", "read from local cache (GitHub unavailable)")
     return 0
 
 
