@@ -107,6 +107,27 @@ class OfflineTests(AdoptedRepoTestCase):
         self.assertIn("authentication", result.stderr.lower())
         self.assertIn("gh auth login", result.stderr)
 
+    def test_offline_state_does_not_regress_to_an_earlier_gate(self):
+        """A record written online must still count after going offline.
+
+        Otherwise `rh status` on a compute node falls back to a cache that
+        predates the gate and reports a gate as pending that has passed.
+        """
+        self.rh_json(["record", "gate", "--gate", "design", "--outcome", "passed", "--body", "### Outcome\npassed"])
+        offline = self.rh_json(["status"], env=self.offline)
+        self.assertNotIn("design", offline["pending_gates"])
+        self.assertNotEqual(offline["state"]["state"], "DESIGN_GATE")
+
+    def test_queue_reason_names_the_real_cause(self):
+        payload = self.rh_json(["record", "checkpoint", "--body", "### Next Action\nx"], env=self.offline)
+        self.assertTrue(payload["queued"])
+        self.assertIn("unreachable", payload["queue_reason"])
+        self.assertNotIn("could not resolve the GitHub repository", payload["queue_reason"])
+
+    def test_auth_failure_is_named_as_auth_not_as_a_missing_repository(self):
+        result = self.rh(["record", "checkpoint", "--body", "x"], env={"RH_FAKE_GH_FAIL": "auth"})
+        self.assertIn("authentication", result.stdout.lower() + result.stderr.lower())
+
     def test_offline_flag_uses_the_cache_without_contacting_github(self):
         self.rh_json(["record", "checkpoint", "--body", "### Next Action\ncached"])
         self.rh_json(["status"])  # populates the cache

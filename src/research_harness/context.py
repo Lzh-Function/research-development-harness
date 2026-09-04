@@ -199,6 +199,26 @@ class Session:
             payload["issue_state"] = issue_obj.state
         atomic_write(self.cache_path(issue), json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
 
+    def remember_record(self, record: Record) -> None:
+        """Add a just-written record to the local cache.
+
+        Without this, going offline right after recording a gate makes
+        ``rh status`` fall back to a cache that predates it and report a state
+        *worse* than reality — a pending gate that has in fact passed.
+        """
+        if record.issue is None:
+            return
+        payload = self.cached_payload(record.issue) or {"issue": record.issue, "records": []}
+        records = list(payload.get("records") or [])
+        if not any(isinstance(item, dict) and item.get("id") == record.id for item in records):
+            records.append(record.to_dict())
+        payload["records"] = records
+        payload["fetched_at"] = iso_timestamp()
+        atomic_write(
+            self.cache_path(record.issue),
+            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        )
+
     def cached_payload(self, issue: int) -> dict[str, Any] | None:
         path = self.cache_path(issue)
         if not path.exists():

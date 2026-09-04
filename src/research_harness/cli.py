@@ -690,6 +690,7 @@ def cmd_record(args: argparse.Namespace) -> int:
         url, created = session.github.post_record(record)
         if not created:
             url = ""
+        session.remember_record(record)
     except (GitHubUnavailableError, GitHubError) as exc:
         # A record is never lost because GitHub misbehaved: queue it and say
         # why, so a misconfiguration is visible rather than silently retried.

@@ -286,7 +286,14 @@ class GitHubClient:
     def issue_comments(self, number: int) -> list[dict[str, Any]]:
         repo = self.repo or self.resolve_repo()
         if not repo:
-            raise GitHubError("could not resolve the GitHub repository (owner/name)")
+            # Re-run the resolution through check() so the caller sees the real
+            # cause — offline, unauthenticated, or genuinely not a GitHub repo —
+            # instead of a generic "could not resolve" that hides all three.
+            self.check(["repo", "view", "--json", "nameWithOwner"], repo_scoped=False)
+            raise GitHubError(
+                "could not resolve the GitHub repository (owner/name)",
+                hint="Set github.repo in .research-harness/config.toml, or add a GitHub remote.",
+            )
         data = self.json(
             ["api", "--paginate", f"repos/{repo}/issues/{number}/comments", "--header", "Accept: application/vnd.github+json"],
             repo_scoped=False,
