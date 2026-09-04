@@ -119,40 +119,80 @@ worst severity: INFO
 
 ---
 
-## 4. ある一日 — キラリティ情報の消失層を特定する
+## 4. Skill の呼び方
 
-深層学習 × ケモインフォマティクスの実際の流れで追います。
+Skill は「明示的に呼ぶ」ことも「Agent が自分で選ぶ」こともできます。
+
+| | Claude Code | Codex |
+|---|---|---|
+| **明示的に呼ぶ** | `/rh-resume` | `$rh-resume`（または `/skills` から選択） |
+| **後ろに文を続ける** | `/rh-scope キラリティの消失層を調べたい` | `$rh-scope キラリティの消失層を調べたい` |
+| **Agent が自分で選ぶ** | description に合致すれば自動 load | 同じく自動 load |
+
+Skill 名の後ろに書いた文は、そのまま Agent に渡ります（Claude Code は `ARGUMENTS:` として付加します）。つまり **`/rh-scope` + いつも通りの依頼文**、という書き方で構いません。
+
+自動 load もありますが、確実性は状況次第です。**実務上は、下の 4 つだけ明示的に打つ**ことをおすすめします。それ以外は普通にプロンプトを書けば、`AGENTS.md` / `CLAUDE.md` の managed block（毎 session 自動で読まれます）が Agent を harness に乗せます。
+
+```
+/rh-resume     ← session を始めるとき（最重要）
+/rh-scope      ← 新しい作業を始めるとき
+/rh-checkpoint ← 作業を止めるとき、長時間実験の前
+/rh-finish     ← 仕上げるとき
+```
+
+---
+
+## 5. ある一日 — キラリティ情報の消失層を特定する
+
+深層学習 × ケモインフォマティクスの実際の流れを、**研究者が実際に打つプロンプト**とともに追います。
 
 **設定**: GNN で分子物性を予測している。「キラリティ情報が message passing のどの層で失われるのか」を調べたい。
 
-以下の `rh` は `~/work/chirality-gnn/.research-harness/bin/rh` の略です。Agent は毎回 `git rev-parse --show-toplevel` から解決するので、どの subdirectory にいても構いません。
+以下、`👤` が研究者の入力、`🤖` が Agent の挙動、`$ rh ...` が Agent が裏で実行するコマンド（と実際の出力）です。
 
-### 9:00 — 研究者「キラリティがどこで消えるか調べたい」
+---
 
-Agent に `rh-scope` を使わせます。Agent は目的・方法・data flow・前提・「何が言えないか」を書いた scope 案を出し、**研究者の合意を取ってから** Issue を作ります。
-
-```bash
-rh issue create \
-  --title "Chirality probe across message passing layers" \
-  --kind experiment --risk high --evidence-required --rq 3 \
-  --body-file scope.md
-```
+### 9:00 — 新しい研究を始める
 
 ```
+👤 /rh-scope GNN のどの層でキラリティ情報が失われるか調べたい。
+   ChEMBL の立体異性体ペアを使って、layer ごとに linear probe をかける想定。
+```
+
+🤖 Agent は `rh context --json` で現在地を確認し、`.research-harness/workflows/scope.md` を読み、コードを眺めてから、**足りない情報だけ**訊いてきます。
+
+> - split は random ですか、scaffold ですか
+> - probe の入力は node embedding ですか、graph readout 後ですか
+> - この実験、GPU 時間はどれくらい見ていますか
+
+```
+👤 scaffold split。node embedding のほう。3時間くらい。
+```
+
+🤖 scope 案（目的 / 方法 / data flow / 前提 / 何が言えないか）を提示し、risk 分類を宣言します。
+
+> これは **high risk** と判断しました。probe の結論が「情報がどこで失われるか」という
+> 中心的な主張に直結し、label 定義の選び方で結論が変わりうるためです。
+> `evidence_required` も立てます。この分類でよいですか。
+
+```
+👤 いいよ、それで
+```
+
+**合意が取れてから** Issue を作ります。ここが一番安く間違えられる瞬間です。
+
+```
+$ rh issue create --title "Chirality probe across message passing layers" \
+    --kind experiment --risk high --evidence-required --rq 3 --body-file scope.md
+
 created Work Issue #1: https://github.com/mylab/chirality-gnn/issues/1
 Next: take the Design Gate if required, then `rh work start 1`.
 ```
 
-`--risk` は **行数ではなく研究上の影響**で決めます。boilerplate 5000 行より、label 定義を変える 10 行のほうが high です。`--evidence-required` は「この作業は科学的な証拠を生む」という宣言で、後で Evidence Gate が必須になります。
-
-作った Issue を今の branch に紐付けます。
-
-```bash
-rh work link 1
-rh status
 ```
+$ rh work link 1
+$ rh status
 
-```
 Current Work         #1 Chirality probe across message passing layers
 Derived State        DESIGN_GATE  — the design gate has no passing Gate Record yet
 Risk                 high (experiment, evidence required)
@@ -165,39 +205,66 @@ Blockers             (none)
 Next Recorded Action (none)
 ```
 
-**`Derived State` は専用 DB ではなく、Git と GitHub と record から毎回計算されます。** high risk なので gate が 3 つ立っています。
+`Derived State` は専用 DB ではなく、Git と GitHub と record から毎回計算されます。high risk なので gate が 3 つ立ちました。
 
-### 9:20 — Gate A（Design）: 研究者が設計を理解しているか
+---
 
-Agent が open-ended に問います。チェックリストの読み上げではなく、曖昧な点を訊きます。
+### 9:20 — Gate A（Design）
+
+**ここは追加のプロンプト不要**です。`rh-scope` の続きとして Agent が Design Gate に入ります。
+
+🤖 チェックリストの読み上げではなく、曖昧な点を訊きます。
 
 > - この probe の AUROC は、何を測っていることになりますか
 > - random split ではなく scaffold split を使う理由は
 > - AUROC が下がったとき、それは情報が消えたことを意味しますか
-> - この設計では何が**言えない**ですか
-
-ここで研究者が「AUROC が下がった層で情報が消えている」と答えたとします。これは誤解です。Agent は勝手に補完して通さず、**修復してから研究者に言い直させます**。
-
-通ったら記録します。保存されるのは outcome と概念だけで、**問答の全文は残しません**。
-
-```bash
-rh record gate --gate design --outcome passed --body-file gate-a.md
-```
-
-Gate は skip できます。研究者が上位の意思決定者です。
-
-```bash
-rh record gate --gate design --outcome overridden \
-  --body "探索的プロトタイプのため今回は skip。"
-```
-
-### 9:40 — 作業開始
-
-```bash
-rh work start 1
-```
+> - この設計では何が **言えない** ですか
 
 ```
+👤 AUROC が下がった層で、キラリティ情報が消えてる
+```
+
+🤖 これは誤解です。Agent は**勝手に補完して通しません**。
+
+> そこは切り分けが必要です。linear probe が測るのは「線形に読み出せるか」で、
+> 情報の有無ではありません。表現が非線形になっただけでも AUROC は落ちます。
+> この区別を踏まえると、AUROC が下がった層について何が言えますか。
+
+```
+👤 なるほど。「線形に読み出せなくなった」までしか言えなくて、
+   消えたかどうかは MLP probe とか別の測り方が要る、ということか
+```
+
+🤖 通過。**問答の全文ではなく、outcome と概念だけ**を記録します。
+
+```
+$ rh record gate --gate design --outcome passed --body-file gate-a.md
+
+recorded gate on issue #1: https://github.com/mylab/chirality-gnn/issues/1#issuecomment-100000
+```
+
+Gate は skip もできます。研究者が上位の意思決定者です。
+
+```
+👤 これ探索的に試すだけだから、design gate は飛ばして
+```
+
+```
+$ rh record gate --gate design --outcome overridden \
+    --body "探索的プロトタイプのため研究者判断で skip。"
+```
+
+---
+
+### 9:40 — 実装に着手する
+
+```
+👤 /rh-start 1
+```
+
+```
+$ rh work start 1
+
 branch    rh/1-chirality-probe-across-message-passing-layers
 issue     #1
 pushed    True
@@ -205,54 +272,89 @@ draft PR  #1000 https://github.com/mylab/chirality-gnn/pull/1000
 note      uncommitted changes were preserved untouched
 ```
 
-branch を切り、push し、**Draft PR** を開きます。Draft PR は「実装の台帳」です。既存 branch で作業中なら `--existing-branch probe-analysis` で取り込めます（**rename しません**）。
+branch を切り、push し、**Draft PR**（実装の台帳）を開きます。既存 branch で作業中なら:
 
-design gate が未取得だと、ここで止まります。これは提案ではなく precondition です。
+```
+👤 /rh-start 1 いま probe-analysis branch で書きかけのものがあるから、それを使って
+```
+
+```
+$ rh work start 1 --existing-branch probe-analysis
+```
+
+既存 branch は **rename されません**。
+
+design gate 未取得のまま着手しようとすると、ここで止まります。提案ではなく precondition です。
 
 ```
 rh: issue #1 requires a design gate before work starts
   hint: Run the Design Gate, then `rh record gate --gate design --outcome passed|overridden`.
 ```
 
-ここから実装は AI の速度で進みます。変数名・型・fixture・logging・軽い refactor で研究者は**呼ばれません**。
+---
 
-### 11:30 — Gate B（Deviation）: 作業の意味が変わった
+### 10:00〜11:30 — ここは普通にプロンプトを書くだけ
 
-ChEMBL の 12% で R/S ラベルが未定義であることが判明しました。これは実装の詳細ではなく **label 定義の問題**なので、Agent は勝手に決めずに止まります。
+**Skill は要りません。** RDH は AI の速度を落とすためのものではありません。
 
-Agent は選択肢と推奨を提示し、研究者が決め、決定を記録します。
-
-```bash
-rh record decision --status accepted --body-file decision.md
+```
+👤 layer 0-5 の node embedding を書き出して、layer ごとに logistic probe をかけて。
+   scaffold split で、seed は 0-4 の 5本
 ```
 
-決定内容（抜粋）:
+```
+👤 probe の AUROC を CI 付きで出す集計スクリプトも
+```
 
-```markdown
-### Trigger
-ChEMBL の R/S ラベルが 12% の分子で未定義だった。
+変数名、型、fixture の置き方、logging、軽い refactor — **こうしたことで研究者は呼ばれません**。Human-in-the-loop であって、Human-in-every-loop ではありません。
 
-### Options
-1. 未定義を除外 — n が 12% 減るが、ラベル定義が明確
-2. RDKit で再割り当て — n を保てるが、ラベル生成過程がモデルと相関しうる
+---
 
-### Research Impact
-option 2 は probe が RDKit の規則を学習する confounder を生む。
+### 11:30 — Gate B（Deviation）: Agent のほうから止まる
 
-### Decision
-option 1 を採用。n の減少より、ラベル定義の明確さを優先する。
+ChEMBL の 12% で R/S ラベルが未定義であることが判明。これは実装の詳細ではなく **label 定義の問題**です。
+
+🤖 **研究者が何も打っていないのに、Agent 側から止まります。** これが Deviation Gate です。
+
+> 手が止まる判断が出ました。ChEMBL の 12% で R/S ラベルが未定義です。
+> これは実装の選択ではなく label 定義の変更なので、勝手に決めません。
+>
+> **元の設計**: 全立体異性体ペアを使う
+> **選択肢 1**: 未定義を除外 — n が 12% 減るが、ラベル定義は明確
+> **選択肢 2**: RDKit で再割り当て — n は保てるが、ラベル生成過程がモデルと相関しうる
+> **研究上の影響**: 選択肢 2 は probe が RDKit の規則を学習する confounder を生みます
+> **推奨**: 選択肢 1
+
+```
+👤 1 で。n が減るより、ラベルの定義がはっきりしてるほうが大事
+```
+
+```
+$ rh record decision --status accepted --body-file decision.md
+
+recorded decision on issue #1: https://github.com/mylab/chirality-gnn/issues/1#issuecomment-100001
 ```
 
 **Issue 本文は書き換えません。** 現在の intent は「元の Issue + 採択された Decision Record」として解釈されるので、当初の意図が消えません。
 
-止まるべき変更は: research question / target / label 定義 / dataset 定義 / 実験的妥当性 / metric の意味 / 大きな architecture / 永続的 API / scope の実質的拡大 / 大きな計算コスト / 解釈。
+自分から相談したいときは明示的に呼べます。
+
+```
+👤 /rh-decision metric を AUROC から AUPRC に変えるべきか迷ってる
+```
+
+止まるべき変更: research question / target / label 定義 / dataset 定義 / 実験的妥当性 / metric の意味 / 大きな architecture / 永続的 API / scope の実質的拡大 / 大きな計算コスト / 解釈。
+
+---
 
 ### 12:40 — 長時間実験の前に checkpoint
 
-sweep を投げる前に、状態を残します。
+```
+👤 /rh-checkpoint これから sweep 投げるので、いったん状態を残して
+```
 
-```bash
-rh record checkpoint --phase validating --body-file checkpoint.md
+```
+$ rh record checkpoint --phase validating --body-file checkpoint.md
 ```
 
 `--phase` は「今この作業が何をしているか」の申告です（`implementing` / `validating` / `blocked` / `review`）。**CLI は diff から「実験中か」を推測しません。**
@@ -275,46 +377,50 @@ sbatch scripts/sweep.sh を投入し、完了後に AUROC を集計する
 
 `Blocked By` に `none` 以外を書くと、`rh` はそれを blocker として扱います。
 
+---
+
 ### 13:00 — 計算ノードは network に出られない
 
 問題ありません。record は outbox に退避します。
 
-```bash
-rh record checkpoint --body-file checkpoint.md
 ```
+$ rh record checkpoint --body-file checkpoint.md
 
-```
 could not reach GitHub — checkpoint record c58c350d-... queued in the outbox
   reason: GitHub is unreachable: dial tcp: lookup api.github.com: ...
 Run `rh sync` when GitHub is reachable; replay is idempotent.
 ```
 
-退避中も `rh status` は正しく動きます（local cache + outbox を読みます）。
+退避中も `rh status` は正しく動きます（local cache + outbox を読みます）。login ノードに戻ったら:
 
-login ノードに戻ったら送ります。**同じ record が二重投稿されることはありません**（UUID で判定）。
-
-```bash
-rh sync
+```
+👤 outbox に溜まってるやつ送っといて
 ```
 
 ```
+$ rh sync
+
 pending    1
 posted     1
 duplicate  0 (already on GitHub; not reposted)
 failed     0
 ```
 
+**同じ record が二重投稿されることはありません**（UUID で判定）。
+
+---
+
 ### 翌 9:00 — 別の AI が、会話ゼロで続きを引き継ぐ
 
-昨日は Claude、今日は Codex。会話は残っていません。**ここが RDH の中心機能です。**
+昨日は Claude、今日は Codex。会話は残っていません。**ここが RDH の中心機能で、明示的に呼ぶ価値が最も高い場面です。**
 
-Agent に `rh-resume` を使わせます。
-
-```bash
-rh resume
+```
+👤 $rh-resume
 ```
 
 ```
+$ rh resume
+
 state               VALIDATING
 issue               #1
 pr                  #1000
@@ -326,7 +432,7 @@ changes since       2 path(s)
 next action         sbatch scripts/sweep.sh を投入し、完了後に AUROC を集計する
 ```
 
-Agent はこれと `--json` の中身（Issue 本文、採択済み Decision、Result、checkpoint、checkpoint 以降の Git 差分）から、こういう briefing を組み立てます。
+🤖 Agent はこれと `--json` の中身（Issue 本文、採択済み Decision、Result、checkpoint、checkpoint 以降の Git 差分）から briefing を組み立てます。
 
 ```
 WHY                 GNN のどの層でキラリティ情報が失われるか（RQ #3）
@@ -340,14 +446,28 @@ UNRESOLVED          evidence gate、knowledge gate
 NEXT                sweep を投入し AUROC を集計する
 ```
 
+ここまで来れば、あとは普通に続けられます。
+
+```
+👤 sweep 終わってるはずだから、結果を集計して
+```
+
 **Issue の記述と実際のコードが食い違っていたら**、Agent は黙って辻褄を合わせず `STATE DIVERGENCE DETECTED` と宣言し、未記録の drift か、意図的だが未記録の変更か、古い checkpoint かを切り分けます。研究上重要なら Deviation Gate に回します。
+
+---
 
 ### 14:00 — 結果が出た。仮説は支持されなかった
 
-layer 0 で AUROC 0.94、layer 5 で 0.52。Result Record を残します。**観測と解釈を厳密に分けます。**
+layer 0 で AUROC 0.94、layer 5 で 0.52。
 
-```bash
-rh record result --body-file result.md
+```
+👤 /rh-result slurm-88213 の結果を記録して。configs/probe_v2.yaml、seed 0-4
+```
+
+🤖 **観測と解釈を厳密に分けて**書きます。
+
+```
+$ rh record result --body-file result.md
 ```
 
 ```markdown
@@ -369,60 +489,81 @@ probe の容量が固定であるため、表現の非線形化と情報消失�
 ```
 
 生ログは GitHub に置きません。**置くのは pointer だけ**です。
+そして **仮説が支持されなくても、それは完了した実験です。** 失敗ではありません。
 
-**仮説が支持されなくても、それは完了した実験です。** 失敗ではありません。
+---
 
-```bash
-rh status
+### 14:30 — Gate C（Evidence）
+
+`rh-result` の続きとして、Agent が Evidence Gate に入ります。**結論は確定させません。**
+
+> 観測事実はこうです。可能な解釈は 2 つあり、対立解釈として probe 容量の
+> 問題が残ります。この evidence で、どこまで主張しますか。
+
+```
+👤 「線形読み出し可能性が単調に低下する」まで。
+   情報の消失は主張しない。MLP probe を follow-up に回す
 ```
 
 ```
-Derived State        EVIDENCE_GATE  — Result Records exist but the evidence gate has not passed
-Pending Gates        evidence, knowledge
+$ rh record gate --gate evidence --outcome passed --body-file gate-c.md
+$ rh status
+
+Derived State        EVIDENCE_GATE → 通過
+Pending Gates        knowledge
 ```
 
-### 14:30 — Gate C（Evidence）: 主張の強さは研究者が決める
-
-Agent は観測事実・可能な解釈・対立解釈・confounder を整理するところまでやり、**結論は確定させません**。
-
-```bash
-rh record gate --gate evidence --outcome passed --body-file gate-c.md
-```
+---
 
 ### 16:00 — 仕上げ
 
-```bash
-rh ready
+```
+👤 /rh-finish
 ```
 
 ```
+$ rh ready
+
 NOT READY_TO_MERGE:
   - knowledge gate has no passing Gate Record
   - worktree has uncommitted changes
 ```
 
-何が足りないかが決定論的に出ます。Agent に `rh-finish` を使わせ、**記憶ではなく record から** PR 本文を合成します。
+🤖 足りないものが決定論的に出ます。Agent は **記憶ではなく record から** PR 本文を合成します。
 
-```bash
-rh pr update --body-file pr.md
+```
+$ rh pr update --body-file pr.md
+
+updated PR #1000 body
 ```
 
-そして Gate D（Knowledge）。「この作業を研究者本人が所有できているか」を確認します。関数名や行番号は訊きません。
+続けて Gate D（Knowledge）。「この作業を研究者本人が所有できているか」を確認します。関数名や行番号は訊きません。
 
 > - この PR を一文で説明してください
 > - 元の research question は
 > - validation は何を保証し、何を保証しませんか
 > - この evidence から何が言えて、何が言えませんか
 
-説明できなければ通しません。修復して言い直してもらい、`repaired` として記録します。
+```
+👤 GNN の layer を深くするとキラリティ情報が線形に読み出せなくなる、
+   というのを probe で示した PR
+```
 
-```bash
-rh record checkpoint --phase review --body-file final-checkpoint.md
-rh record gate --gate knowledge --outcome repaired --body-file gate-d.md
-rh ready
+🤖 まだ通しません。
+
+> 「読み出せなくなる」と「失われる」の区別は、この PR の主張の核です。
+> validation が保証しないことのほうを、もう一度説明してもらえますか。
+
+```
+👤 probe の容量が固定だから、表現が非線形になっただけの場合と
+   情報が消えた場合を区別できてない。だから消失は主張できない
 ```
 
 ```
+$ rh record checkpoint --phase review --body-file final-checkpoint.md
+$ rh record gate --gate knowledge --outcome repaired --body-file gate-d.md
+$ rh ready
+
 READY_TO_MERGE
 The researcher merges. RDH never runs `gh pr merge`.
 ```
@@ -431,7 +572,22 @@ The researcher merges. RDH never runs `gh pr merge`.
 
 ---
 
-## 5. コマンド一覧と使いどころ
+### この一日で、研究者が明示的に打った Skill は 6 回だけ
+
+```
+/rh-scope      9:00   新しい作業を始めるとき
+/rh-start      9:40   実装に着手するとき
+/rh-checkpoint 12:40  長時間実験の前
+$rh-resume     翌9:00 会話ゼロから引き継ぐとき（最重要）
+/rh-result     14:00  結果が出たとき
+/rh-finish     16:00  仕上げるとき
+```
+
+Gate A / B / C / D は、それぞれ `rh-scope` / Agent 側の自発的停止 / `rh-result` / `rh-finish` の中で起きるので、**Gate のために何かを打つ必要はありません**。それ以外の時間は、普通にプロンプトを書いているだけです。
+
+---
+
+## 6. コマンド一覧と使いどころ
 
 ### 日常的に使うもの
 
@@ -474,22 +630,24 @@ The researcher merges. RDH never runs `gh pr merge`.
 
 ### Skill と CLI の対応
 
-研究者は基本的に Skill を呼ぶだけで、CLI を直接叩くのは Agent です。
+研究者は Skill を呼ぶだけで、CLI を直接叩くのは Agent です。
 
-| Skill | 中で使う CLI |
-|---|---|
-| `rh-scope` | `issue create`、`record gate --gate design` |
-| `rh-start` | `work start` |
-| `rh-checkpoint` | `record checkpoint` |
-| `rh-resume` | `context`、`status`、`resume` |
-| `rh-status` | `status` |
-| `rh-decision` | `record decision`、`record gate --gate deviation` |
-| `rh-result` | `record result`、`record gate --gate evidence` |
-| `rh-finish` | `ready`、`pr update`、`record gate --gate knowledge` |
+| Skill | 呼び方 | 中で使う CLI | 含まれる Gate |
+|---|---|---|---|
+| `rh-scope` | 明示推奨 | `issue create`、`record gate --gate design` | **A. Design** |
+| `rh-start` | 明示推奨 | `work start` | — |
+| `rh-checkpoint` | 明示推奨 | `record checkpoint` | — |
+| `rh-resume` | **明示必須に近い** | `context`、`status`、`resume` | — |
+| `rh-status` | Agent 任せで可 | `status` | — |
+| `rh-decision` | **Agent 側から発火** | `record decision`、`record gate --gate deviation` | **B. Deviation** |
+| `rh-result` | 明示推奨 | `record result`、`record gate --gate evidence` | **C. Evidence** |
+| `rh-finish` | 明示推奨 | `ready`、`pr update`、`record gate --gate knowledge` | **D. Knowledge** |
+
+**4 つの Human Gate は、いずれも Skill の中で起きます。** Gate を開くために研究者が何かを打つ必要はありません。特に Deviation Gate は、研究者が何も言っていないときに Agent 側から止まるのが正常な動作です。
 
 ---
 
-## 6. Human Gate は 4 つだけ
+## 7. Human Gate は 4 つだけ
 
 | Gate | いつ | 何を確認するか |
 |---|---|---|
@@ -512,7 +670,7 @@ risk と gate の対応（`.research-harness/config.toml` で変更可）:
 
 ---
 
-## 7. RDH が絶対にしないこと
+## 8. RDH が絶対にしないこと
 
 以下は「推奨しない」ではなく、**code で拒否されます**。
 
@@ -529,7 +687,7 @@ branch / tag / ref の削除            Issue の削除     gh pr merge
 
 ---
 
-## 8. つまずきやすい点
+## 9. つまずきやすい点
 
 **Q. `rh record gate` が「not linked to a Work Issue」と言う**
 Issue を作った直後は branch と紐付いていません。`rh work link <n>` するか、`--issue <n>` を渡してください。
@@ -543,12 +701,15 @@ title が日本語だと ASCII slug が空になるためです。説明的な b
 **Q. 複数の AI を同時に走らせたい**
 branch を分けてください（作業 A → branch A、作業 B → branch B）。同一 branch を 2 つの Agent が同時に書く運用は推奨しません。
 
+**Q. Skill を呼び忘れたらどうなるのか**
+`AGENTS.md` / `CLAUDE.md` の managed block は毎 session 自動で読まれるので、Skill を呼ばなくても「chat history ではなく repo-local state から復元しろ」「medium/high は実装前に scope しろ」「checkpoint を残せ」までは Agent に届きます。ただし **これらは指示であって、hook による強制ではありません**。Agent が `rh` を一度も呼ばなければ RDH は何も起きません。技術的に硬いのは、Agent が `rh` を呼んだ後（design gate 未取得なら `rh work start` が exit 3 で止まる、など）だけです。**session 冒頭の `/rh-resume` だけは明示的に打つ**のが確実です。
+
 **Q. `rh doctor` が gh で ERROR を出す**
 `gh` が未 install か未認証です。RDH は `gh` を勝手に install しません。`gh auth login` してください。
 
 ---
 
-## 9. 開発・検証
+## 10. 開発・検証
 
 ```bash
 ./run-tests -q
