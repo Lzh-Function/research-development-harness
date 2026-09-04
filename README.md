@@ -1,157 +1,126 @@
 # Research Development Harness
 
-A repository-local harness for human–AI research development.
+研究開発のための、完全 repository-local な Human–AI 開発 Harness。
 
-Claude Code and Codex generate research code far faster than a researcher can
-absorb it. RDH does not slow that down. It keeps four things recoverable, and
-returns only the decisions that genuinely need a human:
+Claude Code や Codex は、研究者が理解できる速度をはるかに超えて研究コードを生成します。RDH はその速度を落としません。落とす代わりに、次の 4 つを失わないよう保持し、本当に人間の判断が必要な決定だけを研究者へ返します。
 
-| Meaning | Canonical source |
+| 意味 | Canonical source |
 |---|---|
-| **Intent** — why and what | Work Issue + accepted Decision Records |
-| **Implementation** — how | Git |
-| **Evidence** — what was observed | Result Records |
-| **Understanding** — what the researcher owns | Gate Records |
+| **Intent** — なぜ・何を | Work Issue + accepted Decision Records |
+| **Implementation** — どう実現したか | Git |
+| **Evidence** — 何が観測されたか | Result Records |
+| **Understanding** — 研究者が何を所有しているか | Gate Records |
 
-Human-in-the-loop, not human-in-every-loop.
+Human-in-the-loop であって、Human-in-every-loop ではありません。
 
 ## Deployment contract
 
-RDH is **fully repository-local**. It creates and modifies nothing under
-`$HOME` — not `.claude`, `.agents`, `.codex`, `.local`, `bin`, `.config`, nor
-any shell rc. There is no global skill, no global `rh`, and no Python package
-to install. This is enforced by an integration test that snapshots a
-temporary `HOME` before and after every command
-([tests/integration/test_home_zero_touch.py](tests/integration/test_home_zero_touch.py)).
+RDH は **完全に repository-local** です。`$HOME` 配下には一切ファイルを作成・変更しません。`.claude`、`.agents`、`.codex`、`.local`、`bin`、`.config`、shell rc のいずれもです。global skill も、global `rh` も、install が必要な Python package もありません。
 
-Requirements in a target repository: **Python 3.11+**, **git**, **gh**.
+これは文書上の約束ではなく、temporary `HOME` を command の実行前後で snapshot 比較する integration test によって実測されています（[tests/integration/test_home_zero_touch.py](tests/integration/test_home_zero_touch.py)）。
 
-## Installing into a research repository
+対象 repository に必要なもの: **Python 3.11+**、**git**、**gh**。
 
-From a clone of this repository:
+## 研究 repository への導入
+
+この repository の clone から実行します。
 
 ```bash
 ./bin/rh adopt /path/to/my-research-project
 ```
 
-That vendors the runtime and workflows into the target. Afterwards the target
-repository is self-contained: this distribution repository is no longer
-needed. Preview first with `--dry-run`.
+これで runtime と workflow が対象へ vendor されます。以降、対象 repository は自己完結し、この distribution repository を必要としません。事前確認には `--dry-run` を使ってください。
 
-Adoption is **overlay + cutover**. It never rewrites history, never renames a
-branch, never modifies research source files, and touches `AGENTS.md` /
-`CLAUDE.md` only between its own markers. It writes exactly:
+Adoption は **Overlay + Cutover** です。履歴を書き換えず、branch を rename せず、研究 source file を変更せず、`AGENTS.md` / `CLAUDE.md` は自身の marker の内側だけに触れます。書き込む対象は厳密に以下だけです。
 
 ```
 .research-harness/**
 .claude/skills/rh-*/**
 .agents/skills/rh-*/**
-AGENTS.md   — managed block only
-CLAUDE.md   — managed block only
+AGENTS.md   — managed block のみ
+CLAUDE.md   — managed block のみ
 ```
 
-Commit the result like any other repository content, so a fresh clone is
-immediately usable.
+生成物は他の repository content と同様に commit してください。そうすることで、fresh clone がそのまま使える状態になります。
 
-## Using it
+## 使い方
 
-In the adopted repository the CLI is:
+adopt 済み repository での CLI は次の通りです。
 
 ```bash
 "$(git rev-parse --show-toplevel)/.research-harness/bin/rh" status
 ```
 
-Agents reach it through eight project skills installed for both Claude Code
-(`.claude/skills/`) and Codex (`.agents/skills/`): `rh-scope`, `rh-start`,
-`rh-checkpoint`, `rh-resume`, `rh-status`, `rh-decision`, `rh-result`,
-`rh-finish`. Each is a thin adapter over the canonical workflow in
-`.research-harness/workflows/` — the workflow prose exists in exactly one
-place, not duplicated per vendor.
+Agent は、Claude Code（`.claude/skills/`）と Codex（`.agents/skills/`）の双方へ配置される 8 つの project skill 経由でこれを利用します。`rh-scope`、`rh-start`、`rh-checkpoint`、`rh-resume`、`rh-status`、`rh-decision`、`rh-result`、`rh-finish` です。
 
-A typical work unit:
+各 skill は `.research-harness/workflows/` にある canonical workflow への thin adapter にすぎません。workflow の本文は 1 箇所にのみ存在し、vendor ごとに複製されていません。
+
+典型的な work unit の流れ:
 
 ```
-rh-scope      → Work Issue, risk classified, [Gate A — Design]
+rh-scope      → Work Issue、risk 分類、[Gate A — Design]
 rh-start      → branch + Draft PR
-  … implement, checkpoint at meaningful boundaries …
-rh-decision   → [Gate B — Deviation] when the meaning of the work changes
-rh-result     → Result Record, [Gate C — Evidence]
-rh-finish     → PR synthesis, [Gate D — Knowledge], READY_TO_MERGE
+  … 実装し、意味のある区切りで checkpoint …
+rh-decision   → 作業の意味が変わったとき [Gate B — Deviation]
+rh-result     → Result Record、[Gate C — Evidence]
+rh-finish     → PR synthesis、[Gate D — Knowledge]、READY_TO_MERGE
 ```
 
-`READY_TO_MERGE` is the end of RDH's responsibility. **The harness never
-merges.**
+`READY_TO_MERGE` が RDH の責任範囲の終端です。**Harness は merge しません。**
 
-## What RDH will not do
+## RDH が行わないこと
 
-Refused in code, not merely discouraged:
+以下は文書上の禁止ではなく、code で拒否されます。
 
 ```
 git reset --hard   git clean       git stash        git restore
 git rebase         commit --amend  history rewrite
 push --force       --force-with-lease
-branch/tag/ref deletion            issue deletion   gh pr merge
+branch/tag/ref の削除               issue の削除     gh pr merge
 ```
 
-Uncommitted work is always preserved. If one of these is what you want, run it
-yourself.
+未 commit の作業は常に保持されます。これらが本当に必要な場合は、研究者自身が実行してください。
 
 ## Commands
 
-| Command | Purpose |
+| Command | 役割 |
 |---|---|
-| `rh version` | runtime and bundle versions |
-| `rh doctor` | read-only environment and installation diagnosis |
-| `rh audit` | read-only repository inventory (no classification) |
-| `rh adopt <target>` | vendor RDH into a research repository |
-| `rh upgrade <target>` | re-vendor a newer RDH, preserving local edits |
-| `rh context` | repo, branch, HEAD, dirty state, linked Issue/PR, outbox |
-| `rh status` | derived state, pending gates, blockers, next action |
-| `rh resume` | everything a fresh session needs to continue |
-| `rh issue create` | Work Issue with an `rh:work` machine marker |
-| `rh work start\|link` | branch + Draft PR, or link an existing branch |
-| `rh record checkpoint\|decision\|result\|gate` | durable records as Issue comments |
-| `rh ready` | deterministic `READY_TO_MERGE` preconditions |
-| `rh sync` | replay queued records (idempotent) |
-| `rh pr update` | replace the Draft PR body |
+| `rh version` | runtime / bundle version |
+| `rh doctor` | 環境と installation の read-only 診断 |
+| `rh audit` | repository の read-only inventory（分類はしない） |
+| `rh adopt <target>` | 研究 repository へ RDH を vendor |
+| `rh upgrade <target>` | local 変更を保持したまま新しい RDH を再 vendor |
+| `rh context` | repo、branch、HEAD、dirty 状態、紐付く Issue/PR、outbox |
+| `rh status` | derived state、pending gates、blockers、next action |
+| `rh resume` | fresh session が作業を継続するために必要な一式 |
+| `rh issue create` | `rh:work` machine marker 付きの Work Issue |
+| `rh work start\|link` | branch + Draft PR、または既存 branch の紐付け |
+| `rh record checkpoint\|decision\|result\|gate` | Issue comment としての durable record |
+| `rh ready` | `READY_TO_MERGE` の決定論的 precondition |
+| `rh sync` | 退避済み record の再送（idempotent） |
+| `rh pr update` | Draft PR body の置換 |
 
-Read commands support `--json`; mutating commands support `--dry-run`.
-Exit code `0` means success; anything else is a failure or an unmet
-precondition.
+read command は `--json` を、mutation command は `--dry-run` を support します。exit code `0` が成功、それ以外は failure または precondition 未充足です。
 
-## Design boundary
+## 設計上の境界
 
-The split is strict, and it is the point of the system:
+この分離こそが本システムの要点であり、厳密に守られています。
 
-* **Agent / Skill** — research intent, risk classification, the Design Grill,
-  semantic deviation detection, evidence interpretation, misconception
-  repair, record and PR prose, the Knowledge Grill.
-* **`rh` runtime** — Git and GitHub state, branch/Issue/PR operations, record
-  parsing and serialization, context gathering, state derivation, gate
-  prerequisite checks, adoption, outbox, sync, doctor, upgrade, managed
-  blocks.
+* **Agent / Skill** — research intent、risk 分類、Design Grill、semantic deviation detection、evidence の解釈、misconception repair、record と PR の文章生成、Knowledge Grill。
+* **`rh` runtime** — Git / GitHub state、branch / Issue / PR 操作、record の parsing と serialization、context 収集、state derivation、gate prerequisite check、adoption、outbox、sync、doctor、upgrade、managed block。
 
-No scientific judgement is implemented in the CLI. No Git or GitHub state
-management is left to natural language alone.
+CLI に scientific judgement は実装されていません。逆に、Git / GitHub の state 管理を自然言語だけに委ねてもいません。
 
-## Offline behaviour
+## Offline 時の挙動
 
-Records that cannot reach GitHub are queued in
-`.git/research-harness/outbox/` and replayed by `rh sync`. Replay is
-idempotent: a record whose UUID already appears on the Issue is dropped, not
-posted twice. `rh status --offline` works from the local cache.
+GitHub へ到達できなかった record は `.git/research-harness/outbox/` へ退避され、`rh sync` で再送されます。再送は idempotent です。UUID が既に Issue 上に存在する record は破棄され、二重投稿されません。`rh status --offline` は local cache から動作します。
 
-## Development
+## 開発
 
 ```bash
 python3 -m unittest discover -s tests -t . -q
 ```
 
-Standard library only — no test dependencies, matching the runtime. GitHub is
-exercised through a fake `gh` executable
-([tests/fixtures/fake_gh.py](tests/fixtures/fake_gh.py)); no automated test
-needs a GitHub account or a network.
+runtime と同じく standard library のみで、test 依存はありません。GitHub は fake `gh` executable（[tests/fixtures/fake_gh.py](tests/fixtures/fake_gh.py)）経由で検証されるため、自動 test に GitHub account も network も不要です。
 
-The authoritative design document is [docs/SPEC.md](docs/SPEC.md).
-Implementation notes and deliberate deviations are in
-[docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md).
+authoritative な設計文書は [docs/SPEC.md](docs/SPEC.md) です。実装上の判断と意図的な差分は [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)、要件ごとの検証根拠は [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) にあります。
