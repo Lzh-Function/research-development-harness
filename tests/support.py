@@ -177,10 +177,18 @@ class Sandbox:
         return self.run(["git", *args], cwd=repo, check=check)
 
     def make_repo(self, name: str = "research", *, commit: bool = True) -> Path:
+        """A repo with a *pushable* local origin.
+
+        The GitHub slug is resolved through the fake `gh` (as it would be for
+        an ssh alias or an enterprise host), so pushes succeed locally while
+        the GitHub side stays entirely faked.
+        """
         repo = self.base / name
+        origin = self.base / f"{name}-origin.git"
         repo.mkdir(parents=True, exist_ok=True)
+        self.run(["git", "init", "-q", "--bare", str(origin)], check=True)
         self.git(repo, ["init", "-q", "-b", "main"])
-        self.git(repo, ["remote", "add", "origin", "https://github.com/octo/research.git"])
+        self.git(repo, ["remote", "add", "origin", str(origin)])
         (repo / "README.md").write_text("# research\n", encoding="utf-8")
         if commit:
             self.git(repo, ["add", "-A"])

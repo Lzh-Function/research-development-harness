@@ -675,12 +675,16 @@ def cmd_record(args: argparse.Namespace) -> int:
 
     queued = False
     url = ""
+    queue_reason = ""
     try:
         url, created = session.github.post_record(record)
         if not created:
             url = ""
     except (GitHubUnavailableError, GitHubError) as exc:
-        session.outbox.enqueue(record, error=getattr(exc, "message", str(exc)))
+        # A record is never lost because GitHub misbehaved: queue it and say
+        # why, so a misconfiguration is visible rather than silently retried.
+        queue_reason = getattr(exc, "message", str(exc))
+        session.outbox.enqueue(record, error=queue_reason)
         queued = True
 
     payload = {
@@ -689,13 +693,15 @@ def cmd_record(args: argparse.Namespace) -> int:
         "issue": link.issue,
         "url": url,
         "queued": queued,
+        "queue_reason": queue_reason,
         "head": record.head,
     }
     if args.json:
         emit_json(payload)
     else:
         if queued:
-            emit(f"GitHub unavailable — {record.kind} record {record.id} queued in the outbox")
+            emit(f"could not reach GitHub — {record.kind} record {record.id} queued in the outbox")
+            emit(f"  reason: {queue_reason}")
             emit("Run `rh sync` when GitHub is reachable; replay is idempotent.")
         else:
             emit(f"recorded {record.kind} on issue #{link.issue}" + (f": {url}" if url else " (already present; not duplicated)"))

@@ -233,7 +233,9 @@ class GitHubClient:
     def resolve_repo(self) -> str | None:
         if self.repo:
             return self.repo
-        result = self.run(["repo", "view", "--json", "nameWithOwner"], repo_scoped=False, retry=False)
+        # Retried: a transient failure here would otherwise cache a negative
+        # result and turn every later call into "could not resolve repository".
+        result = self.run(["repo", "view", "--json", "nameWithOwner"], repo_scoped=False)
         if not result.ok:
             return None
         try:

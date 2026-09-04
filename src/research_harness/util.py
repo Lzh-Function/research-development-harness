@@ -26,11 +26,17 @@ def utc_now() -> datetime:
 
 
 def iso_timestamp(moment: datetime | None = None) -> str:
-    """RFC3339 timestamp in UTC with second precision."""
+    """RFC3339 timestamp in UTC, millisecond precision.
+
+    Milliseconds matter: several records are routinely written inside one
+    second (a gate closing a deviation right after the decision that resolved
+    it), and record ordering is what state derivation reads.
+    """
     moment = moment or utc_now()
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=timezone.utc)
-    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    moment = moment.astimezone(timezone.utc)
+    return moment.strftime("%Y-%m-%dT%H:%M:%S.") + f"{moment.microsecond // 1000:03d}Z"
 
 
 def new_uuid() -> str:

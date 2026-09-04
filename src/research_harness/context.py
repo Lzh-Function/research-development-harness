@@ -92,6 +92,7 @@ class Session:
         self._gh_runner = gh_runner or self.runner
         self._repo_override = repo_override
         self._github: GitHubClient | None = None
+        self._resolved_slug: str | None = None
         self._records_cache: dict[int, list[Record]] = {}
         self.installation: Installation | None = Installation.locate_optional(self.git.root)
         self.config: Config = self.installation.config if self.installation else Config()
@@ -101,8 +102,8 @@ class Session:
 
     # ------------------------------------------------------------------ github
 
-    @property
-    def repo_slug(self) -> str | None:
+    def _static_repo_slug(self) -> str | None:
+        """Repository slug derivable without contacting GitHub."""
         if self._repo_override:
             return self._repo_override
         if self.config.github_repo:
@@ -112,10 +113,28 @@ class Session:
         return f"{parsed[0]}/{parsed[1]}" if parsed else None
 
     @property
+    def repo_slug(self) -> str | None:
+        """Slug from config/remote, falling back to ``gh``'s own resolution.
+
+        The fallback matters for remotes gh understands but a URL parser does
+        not: ssh aliases, insteadOf rewrites, enterprise hosts.
+        """
+        static = self._static_repo_slug()
+        if static:
+            return static
+        if self._resolved_slug is not None or self.offline:
+            return self._resolved_slug or None
+        try:
+            self._resolved_slug = self.github.resolve_repo() or ""
+        except HarnessError:
+            self._resolved_slug = ""
+        return self._resolved_slug or None
+
+    @property
     def github(self) -> GitHubClient:
         if self._github is None:
             self._github = GitHubClient(
-                repo=self.repo_slug,
+                repo=self._static_repo_slug(),
                 cwd=self.git.root,
                 runner=self._gh_runner,
                 tmp_dir=self.state_dir / "tmp",
@@ -212,7 +231,9 @@ class Session:
         for entry in self.outbox.entries():
             if entry.record.issue == issue and entry.record.id not in seen:
                 records.append(entry.record)
-        records.sort(key=lambda r: (r.created_at, r.id))
+        # Stable sort: comments arrive in chronological order from GitHub, so
+        # records sharing a timestamp keep the order they were written in.
+        records.sort(key=lambda r: r.created_at)
         if from_github:
             self._records_cache[issue] = records
         return records, from_github

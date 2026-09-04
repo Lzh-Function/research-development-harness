@@ -332,4 +332,5 @@ def latest(records: list[Record], kind: str | None = None) -> Record | None:
 
 
 def sort_records(records: list[Record]) -> list[Record]:
-    return sorted(records, key=lambda r: (r.created_at, r.id))
+    """Chronological, stable: equal timestamps keep their source order."""
+    return sorted(records, key=lambda r: r.created_at)

@@ -163,6 +163,31 @@ class DeriveStateTests(unittest.TestCase):
         self.assertEqual(checkpoint_phase(record), "implementing")
 
 
+class RecordOrderingTests(unittest.TestCase):
+    """Regression: two records written in the same second must stay ordered."""
+
+    def test_millisecond_timestamps_are_distinct(self):
+        from research_harness.util import iso_timestamp
+
+        stamps = [iso_timestamp() for _ in range(50)]
+        self.assertTrue(all(len(s) == len("2026-01-01T00:00:00.000Z") for s in stamps))
+        self.assertEqual(stamps, sorted(stamps))
+
+    def test_same_timestamp_keeps_source_order(self):
+        from research_harness.records import sort_records
+
+        at = "2026-01-01T00:00:00.000Z"
+        blocked = gate("deviation", "blocked", at)
+        passed = gate("deviation", "passed", at)
+        self.assertEqual([r.outcome for r in sort_records([blocked, passed])], ["blocked", "passed"])
+        self.assertFalse(gate_satisfied([blocked], "deviation"))
+
+    def test_deviation_resolution_wins_within_one_second(self):
+        at = "2026-01-01T00:00:00.000Z"
+        records = [gate("design", "passed", at), gate("deviation", "blocked", at), gate("deviation", "passed", at)]
+        self.assertNotIn("deviation", pending_gates(records, Config(), WorkMarker(risk="medium")))
+
+
 class ReadyTests(unittest.TestCase):
     def test_lists_every_missing_precondition(self):
         problems = ready_blockers(
