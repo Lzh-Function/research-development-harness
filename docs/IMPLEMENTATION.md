@@ -107,6 +107,34 @@ and given its identity through environment variables, so the environment
 itself is quiet — there is an explicit test asserting that, plus three canary
 tests proving the detector notices additions, modifications and deletions.
 
+## Platform assumptions, verified
+
+Checked against official documentation in September 2026 rather than assumed
+from SPEC 67:
+
+* **Claude Code** — project skills load from `.claude/skills/<name>/SKILL.md`,
+  scanned from the working directory up to the repository root. Frontmatter is
+  YAML between `---` markers with the opening `---` on the very first line.
+  Fields that remain valid on every distribution path are the Agent Skills
+  standard's six: `allowed-tools`, `compatibility`, `description`, `license`,
+  `metadata`, `name`. A Claude-only field (`argument-hint`, say) causes an
+  unexpected-key error elsewhere.
+  <https://code.claude.com/docs/en/skills>
+* **Codex** — repository skills load from `.agents/skills/<name>/SKILL.md`,
+  scanned from the working directory up to the repository root. `SKILL.md`
+  must include `name` and `description`.
+  <https://learn.chatgpt.com/docs/build-skills>
+
+The vendored skills therefore use only `name` and `description`, keeping one
+file valid for both products;
+[tests/unit/test_skill_bundle.py](../tests/unit/test_skill_bundle.py) fails if
+a later edit adds a vendor-specific field, lets the two trees drift apart, or
+lets an adapter grow into a copy of the workflow.
+
+Because both products scan up to the repository root, committed project skills
+work from any subdirectory — which is why the skills locate the CLI through
+`git rev-parse --show-toplevel` rather than a relative path.
+
 ## Known limitations in v0.1
 
 * Live end-to-end tests against a real GitHub repository are not included;
