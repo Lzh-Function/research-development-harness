@@ -1,0 +1,5 @@
+#!/bin/sh
+# Run the full RDH test suite. No dependencies beyond Python 3.11+ and git.
+set -e
+cd "$(dirname "$0")"
+exec python3 -m unittest discover -s tests -t . -p 'test_*.py' "$@"
