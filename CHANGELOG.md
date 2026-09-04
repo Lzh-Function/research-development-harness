@@ -21,3 +21,19 @@ This project follows semantic versioning for `runtime_version`,
   `rh ready`, `rh sync`, `rh pr update`, `rh audit`.
 - Phase 5 — canonical workflows and policies in `bundle/`, thin Claude and
   Codex project skills generated into `.claude/skills/` and `.agents/skills/`.
+- Acceptance scenarios from SPEC 64 exercised end to end: existing-project
+  migration (audit → baseline → adopt the in-flight branch without renaming
+  it), the Knowledge Gate blocking and then releasing `READY_TO_MERGE`, and
+  self-containment of an adopted repository including a relocated copy.
+
+### Fixed during implementation
+- `READY_TO_MERGE` is reachable only from a declared `--phase review`
+  checkpoint; previously gate-free low-risk work reached it the moment work
+  started.
+- Branch links survive across processes (`hash()` → SHA-256 digest).
+- A transient network failure during repository resolution no longer caches a
+  negative result and queues records that should have been retried.
+- Record timestamps carry milliseconds and ordering is stable on ties, so a
+  deviation gate can no longer outrank the gate that closed it.
+- Repository slug detection falls back to `gh` for remotes a URL parser
+  cannot read (ssh aliases, `insteadOf` rewrites, enterprise hosts).

@@ -21,7 +21,7 @@ from . import RUNTIME_VERSION
 from .adopt import Distribution, adopt
 from .config import HARNESS_DIRNAME
 from .context import Session
-from .doctor import ERROR, is_distribution_repo, run_doctor
+from .doctor import ERROR, run_doctor
 from .errors import (
     GitHubError,
     GitHubUnavailableError,
@@ -30,7 +30,6 @@ from .errors import (
     PreconditionError,
     UsageError,
 )
-from .git import GitRepo
 from .github import GitHubIssue
 from .managed import has_block
 from .records import (
@@ -54,7 +53,7 @@ from .state import (
     ready_blockers,
 )
 from .upgrade import upgrade
-from .util import dumps_pretty, iso_timestamp
+from .util import dumps_pretty
 
 PROG = "rh"
 
@@ -117,7 +116,13 @@ def require_link(session: Session, issue_override: int | None = None) -> WorkLin
 
 
 def cmd_version(args: argparse.Namespace) -> int:
-    payload = {"runtime_version": RUNTIME_VERSION, "python": sys.version.split()[0]}
+    payload = {
+        "runtime_version": RUNTIME_VERSION,
+        "python": sys.version.split()[0],
+        # Which runtime is actually executing: an adopted repository must be
+        # running its own vendored copy, never the distribution repository's.
+        "runtime_path": str(Path(__file__).resolve().parent),
+    }
     try:
         session = make_session(args)
     except HarnessError:

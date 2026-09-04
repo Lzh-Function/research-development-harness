@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from . import MIN_RUNTIME_VERSION, RUNTIME_VERSION
-from .config import HARNESS_DIRNAME, Installation
+from .config import HARNESS_DIRNAME
 from .context import Session
 from .errors import HarnessError
 from .managed import has_block
