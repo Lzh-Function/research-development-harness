@@ -364,6 +364,10 @@ def _gather_work(session: Session, *, refresh: bool = True) -> dict[str, Any]:
     checkpoint = latest_checkpoint(records)
     result["next_command"] = next_command(derived.state, issue=link.issue, pr=pr_number)
     result["next_command_note"] = next_command_note(derived.state)
+    if started and pr_number is None and result["next_command"] is not None:
+        # Work is under way but has no Draft PR — usually because the branch
+        # had no commits when it was created. `rh ready` will block on this.
+        result["next_command"] = "rh pr create"
     result.update(
         {
             "issue": {
@@ -766,26 +770,11 @@ def cmd_work_start(args: argparse.Namespace) -> int:
     pr_number = None
     pr_url = None
     pr_error = None
+    pr_deferred = False
     if not args.no_pr:
-        try:
-            existing = session.github.pr_for_branch(target_branch)
-            if existing is not None:
-                pr_number, pr_url = existing.number, existing.url
-            elif pushed:
-                body = _initial_pr_body(session, issue_number, marker)
-                base = args.base or session.github.default_branch() or session.context().default_branch
-                pr = session.github.pr_create(
-                    title=issue_obj.title or f"Work #{issue_number}",
-                    body=body,
-                    head=target_branch,
-                    base=base,
-                    draft=True,
-                )
-                pr_number, pr_url = pr.number, pr.url
-            else:
-                pr_error = "branch was not pushed, so no Draft PR was created"
-        except HarnessError as exc:
-            pr_error = exc.message
+        pr_number, pr_url, pr_error, pr_deferred = _open_draft_pr(
+            session, issue_obj, marker, target_branch, base=args.base, pushed=pushed
+        )
     if pr_number:
         link.pr = pr_number
         session.save_link(link)
@@ -798,6 +787,7 @@ def cmd_work_start(args: argparse.Namespace) -> int:
         "pr": pr_number,
         "pr_url": pr_url,
         "pr_error": pr_error,
+        "pr_deferred": pr_deferred,
     }
     if args.json:
         emit_json(payload)
@@ -806,8 +796,96 @@ def cmd_work_start(args: argparse.Namespace) -> int:
         emit(f"issue     #{issue_number}")
         emit(f"pushed    {pushed}" + (f" ({push_error})" if push_error else ""))
         emit(f"draft PR  {('#' + str(pr_number) + ' ' + (pr_url or '')) if pr_number else '(none)'}" + (f" — {pr_error}" if pr_error else ""))
+        if pr_deferred:
+            emit("          GitHub cannot open a PR on a branch with no commits yet.")
+            emit("          Commit your first change, then run: rh pr create")
         if plan["dirty"]:
             emit("note      uncommitted changes were preserved untouched")
+    return 0
+
+
+def _open_draft_pr(
+    session: Session,
+    issue_obj: GitHubIssue,
+    marker: WorkMarker,
+    branch: str,
+    *,
+    base: str | None,
+    pushed: bool,
+) -> tuple[int | None, str | None, str | None, bool]:
+    """Open (or find) the Draft PR for a work branch.
+
+    GitHub refuses to open a pull request on a branch with no commits ahead of
+    its base, which is exactly the state `rh work start` leaves a fresh branch
+    in. Rather than surfacing a GraphQL error, this reports the situation and
+    defers: `rh pr create` opens the PR after the first commit.
+
+    Returns ``(number, url, error, deferred)``.
+    """
+    try:
+        existing = session.github.pr_for_branch(branch)
+    except HarnessError as exc:
+        return None, None, exc.message, False
+    if existing is not None:
+        return existing.number, existing.url, None, False
+    if not pushed:
+        return None, None, "branch was not pushed, so no Draft PR was created", True
+
+    base_ref = base or session.github.default_branch() or session.context().default_branch
+    ahead = None
+    for candidate in ([f"origin/{base_ref}", base_ref] if base_ref else []):
+        ahead = session.git.commits_ahead(candidate, branch)
+        if ahead is not None:
+            break
+    if ahead == 0:
+        return None, None, "no commits on this branch yet", True
+
+    try:
+        pr = session.github.pr_create(
+            title=issue_obj.title or f"Work #{issue_obj.number}",
+            body=_initial_pr_body(session, issue_obj.number, marker),
+            head=branch,
+            base=base_ref,
+            draft=True,
+        )
+    except HarnessError as exc:
+        return None, None, exc.message, False
+    return pr.number, pr.url, None, False
+
+
+def cmd_pr_create(args: argparse.Namespace) -> int:
+    """Open the Draft PR for the current work, once the branch has commits."""
+    session = make_session(args)
+    link = require_link(session, args.issue)
+    branch = session.git.branch()
+    if not branch:
+        raise PreconditionError("HEAD is detached; switch to the work branch first")
+    issue_obj = session.issue(link.issue)
+    if issue_obj is None:
+        raise PreconditionError(f"could not read Work Issue #{link.issue}")
+    marker = WorkMarker.parse(issue_obj.body) or WorkMarker()
+    if args.dry_run:
+        emit_json({"dry_run": True, "issue": link.issue, "branch": branch}) if args.json else emit(
+            f"[dry-run] would open a Draft PR for #{link.issue} from {branch}"
+        )
+        return 0
+    number, url, error, deferred = _open_draft_pr(
+        session, issue_obj, marker, branch, base=args.base, pushed=True
+    )
+    if number is None:
+        message = error or "could not open a Draft PR"
+        if deferred:
+            raise PreconditionError(
+                f"cannot open a Draft PR: {message}",
+                hint="Commit at least one change on this branch, push it, then retry.",
+            )
+        raise PreconditionError(f"could not open a Draft PR: {message}")
+    link.pr = number
+    session.save_link(link)
+    if args.json:
+        emit_json({"pr": number, "url": url, "issue": link.issue, "branch": branch})
+    else:
+        emit(f"draft PR  #{number} {url or ''}")
     return 0
 
 
@@ -1129,6 +1207,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     pr_parser = subparsers.add_parser("pr", help="pull request operations")
     pr_sub = pr_parser.add_subparsers(dest="pr_command", required=True)
+    pr_create = pr_sub.add_parser("create", help="open the Draft PR for the current work")
+    pr_create.add_argument("--base", help="base branch")
+    pr_create.add_argument("--issue", type=int)
+    pr_create.add_argument("--json", action="store_true")
+    pr_create.add_argument("--dry-run", action="store_true")
+    pr_create.set_defaults(func=cmd_pr_create)
+
     pr_update = pr_sub.add_parser("update", help="replace the Draft PR body")
     pr_update.add_argument("--body-file", dest="body_file")
     pr_update.add_argument("--body")

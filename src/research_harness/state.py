@@ -365,10 +365,11 @@ def ready_blockers(
         else:
             section = extract_section(pr_body or "", "Does NOT Establish")
             if is_placeholder(section):
+                # Missing and present-but-empty are the same failure to the
+                # researcher: the work has not said what it cannot claim.
                 problems.append(
-                    'PR body has no filled-in "Does NOT Establish" section'
-                    if section is None
-                    else 'PR body\'s "Does NOT Establish" section is still empty'
+                    'PR body does not say what this work does NOT establish '
+                    '(the "Does NOT Establish" section is missing or empty)'
                 )
     if evidence_required and config.require_provenance:
         for record in [r for r in records if r.kind == "result"]:

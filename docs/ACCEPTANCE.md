@@ -22,7 +22,7 @@ Every requirement in SPEC 64 (Mandatory Acceptance Scenarios) and SPEC 70
 | 9 | `READY_TO_MERGE` reachable | `integration.RecordAndStateTests.test_state_advances_through_the_flow` |
 | 10 | The harness never merges | `integration.NoDestructiveOperationsTests`, `e2e.ScenarioH.test_harness_never_merges_even_when_ready`, and `gh pr merge` exits 99 in the fake `gh` |
 | 11 | Outbox + idempotent sync on GitHub failure | `integration.OfflineTests` (9 tests), `unit.test_outbox` |
-| 12 | Main behaviours covered by automated tests | 272 tests, standard library only |
+| 12 | Main behaviours covered by automated tests | 318 tests, standard library only |
 
 ## Mandatory Acceptance Scenarios (SPEC 64)
 
@@ -67,10 +67,26 @@ requirement. It is read-only and additive: no existing command, record schema
 or deployment contract changed. Covered by
 `integration.test_log` (24 tests) and `unit.test_records.HeadlineTests`.
 
+## Live end-to-end run
+
+Executed 2026-09-05 against the real `Lzh-Function/research-development-harness`
+repository with `gh` 2.100.0, from a clone adopted by `rh adopt`:
+Research Question, Work Issue with an `rh:work` marker, refused `work start`
+before the design gate, Design/Evidence/Knowledge Gate Records, real work
+branch and Draft PR, checkpoint and result records, the structural `rh ready`
+block and its release, `rh rq show`, `rh log`, offline queueing and
+exactly-once `rh sync`, and a clean `rh doctor`. Verified independently
+through `gh`: six durable records with correct markers, the PR still Draft,
+and remote `main` untouched.
+
+It found one defect the fake `gh` could not: GitHub refuses to open a pull
+request on a branch with no commits, which is the state `rh work start` leaves
+a new branch in.
+
 ## Not covered in v0.1
 
-* Live end-to-end tests against a real GitHub repository. The `gh` adapter is
-  covered by contract against a fake executable; a live suite would live in
-  `tests/e2e/` gated on an explicit test-repository environment variable.
+* An *automated* live suite. The run above was manual; a scripted version
+  would live in `tests/e2e/` gated on an explicit test-repository environment
+  variable, so ordinary CI still needs no GitHub account.
 * Concurrency is documented (one writer per branch) but not enforced by a
   lock.

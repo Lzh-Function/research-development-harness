@@ -25,6 +25,17 @@ This creates or links the branch, pushes it, and opens a **Draft** PR whose
 body comes from `templates/pull-request.md`. Existing branches are adopted,
 never renamed.
 
+**A brand-new branch has no commits, and GitHub refuses to open a pull request
+on one.** When that happens `rh work start` says so and defers; open the PR
+yourself after the first commit:
+
+```bash
+"$RH" pr create
+```
+
+`rh status` will point you there too. Nothing is lost in the meantime: the
+branch, the link and the Work Issue all exist already.
+
 If the worktree is dirty, RDH keeps the changes. If Git itself refuses the
 switch, tell the researcher; never stash or reset on their behalf.
 

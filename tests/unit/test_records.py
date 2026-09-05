@@ -148,6 +148,16 @@ class HeadlineTests(unittest.TestCase):
         record = Record(kind="result", body="### Observation\n| a | b |\n- 実測値 0.52")
         self.assertEqual(headline(record), "実測値 0.52")
 
+    def test_joins_a_hard_wrapped_paragraph(self):
+        """Markdown prose wraps; a summary must not stop at the wrap column."""
+        record = Record(kind="result", body="### Observation\n14 が期待どおり動作した。\n1 件だけ拒否された。\n\n### Supports\nx")
+        self.assertEqual(headline(record), "14 が期待どおり動作した。")
+
+    def test_stops_at_the_paragraph_break(self):
+        record = Record(kind="decision", body="### Decision\nfirst line\ncontinues here\n\nsecond paragraph")
+        self.assertEqual(headline(record), "first line continues here")
+        self.assertNotIn("second paragraph", headline(record))
+
     def test_truncates_long_lines(self):
         record = Record(kind="result", body="### Observation\n" + "あ" * 200)
         self.assertEqual(len(headline(record, limit=40)), 40)

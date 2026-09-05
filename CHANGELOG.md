@@ -32,6 +32,13 @@ This project follows semantic versioning for `runtime_version`,
   project learned", which `rh status` and `rh resume` (single work unit)
   could not.
 
+- `rh status` reports the next command for the current derived state.
+- `rh ready` applies two structural checks to evidence-required work: the PR
+  body must say what the work does not establish, and every Result Record must
+  carry at least one filled Provenance field. Configurable under `[ready]`.
+- Research Questions are first-class: `rh rq create|list|show`, `rh log --rq`.
+- `rh pr create` opens the Draft PR once a new branch has its first commit.
+
 ### Fixed during implementation
 - `READY_TO_MERGE` is reachable only from a declared `--phase review`
   checkpoint; previously gate-free low-risk work reached it the moment work

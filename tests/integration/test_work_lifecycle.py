@@ -56,6 +56,19 @@ class LifecycleTestCase(SandboxTestCase):
         self.sandbox.git(self.repo, ["add", "-A"])
         self.sandbox.git(self.repo, ["commit", "-q", "-m", message])
 
+    def start_work(self, issue, *, seed="probe.py"):
+        """Start work the way the real flow goes.
+
+        GitHub cannot open a pull request on a branch with no commits, so
+        `rh work start` defers it: branch first, first commit, then the PR.
+        """
+        payload = self.rh_json(["work", "start", str(issue)])
+        if payload.get("pr") is None:
+            self.commit(seed, f"# work on #{issue}\n", f"begin work on #{issue}")
+            self.sandbox.git(self.repo, ["push", "-q", "origin", "HEAD"])
+            payload = {**payload, **self.rh_json(["pr", "create"])}
+        return payload
+
 
 class IssueCreationTests(LifecycleTestCase):
     def test_work_issue_carries_a_machine_marker(self):
@@ -120,8 +133,24 @@ class WorkStartTests(LifecycleTestCase):
         self.rh_json(["work", "link", str(self.issue)])
         self.pass_gate(self.issue, "design")
 
-    def test_creates_branch_and_draft_pr(self):
+    def test_defers_the_pr_on_a_branch_with_no_commits(self):
+        """GitHub refuses a PR with no commits; RDH says so instead of failing."""
         payload = self.rh_json(["work", "start", str(self.issue)])
+        self.assertEqual(payload["branch"], f"rh/{self.issue}-probe-layer-7")
+        self.assertIsNone(payload["pr"])
+        self.assertTrue(payload["pr_deferred"])
+        self.assertIn("no commits", payload["pr_error"])
+        self.assertEqual(self.sandbox.gh_data()["prs"], {})
+        self.assertIn("rh pr create", self.rh(["work", "start", str(self.issue)], check=True).stdout)
+
+    def test_pr_create_is_refused_until_there_is_a_commit(self):
+        self.rh_json(["work", "start", str(self.issue)])
+        result = self.rh(["pr", "create"])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("no commits", result.stderr)
+
+    def test_creates_branch_and_draft_pr(self):
+        payload = self.start_work(self.issue)
         self.assertEqual(payload["branch"], f"rh/{self.issue}-probe-layer-7")
         self.assertIsNotNone(payload["pr"])
         pr = self.sandbox.gh_data()["prs"][str(payload["pr"])]
@@ -133,12 +162,12 @@ class WorkStartTests(LifecycleTestCase):
         )
 
     def test_experiment_uses_refs_not_closes(self):
-        payload = self.rh_json(["work", "start", str(self.issue)])
+        payload = self.start_work(self.issue)
         self.assertIn("Refs #", self.sandbox.gh_data()["prs"][str(payload["pr"])]["body"])
 
     def test_implementation_uses_closes(self):
         number = self.create_issue(title="Add loader", kind="implementation", risk="low", evidence=False)
-        payload = self.rh_json(["work", "start", str(number)])
+        payload = self.start_work(number, seed="loader.py")
         self.assertIn(f"Closes #{number}", self.sandbox.gh_data()["prs"][str(payload["pr"])]["body"])
 
     def test_existing_branch_is_adopted_not_renamed(self):
@@ -168,7 +197,7 @@ class WorkStartTests(LifecycleTestCase):
         self.assertNotIn(f"rh/{self.issue}", self.sandbox.git(self.repo, ["branch"]).stdout)
 
     def test_restarting_reuses_the_existing_pr(self):
-        first = self.rh_json(["work", "start", str(self.issue)])
+        first = self.start_work(self.issue)
         second = self.rh_json(["work", "start", str(self.issue)])
         self.assertEqual(first["pr"], second["pr"])
         self.assertEqual(len(self.sandbox.gh_data()["prs"]), 1)
@@ -187,7 +216,7 @@ class RecordAndStateTests(LifecycleTestCase):
         self.issue = self.create_issue()
         self.rh_json(["work", "link", str(self.issue)])
         self.pass_gate(self.issue, "design")
-        self.work = self.rh_json(["work", "start", str(self.issue)])
+        self.work = self.start_work(self.issue)
 
     def comments(self):
         return self.sandbox.gh_data()["issues"][str(self.issue)]["comments"]
@@ -299,7 +328,7 @@ class AgentSwitchTests(LifecycleTestCase):
         issue = self.create_issue()
         self.rh_json(["work", "link", str(issue)])
         self.pass_gate(issue, "design")
-        self.rh_json(["work", "start", str(issue)])
+        self.start_work(issue)
         self.rh_json([
             "record", "decision", "--status", "accepted",
             "--body", "### Decision\nUse cosine similarity, not L2.\n\n### Rationale\nScale invariance.",
@@ -332,13 +361,13 @@ class AgentSwitchTests(LifecycleTestCase):
     def test_records_are_readable_by_a_second_clone(self):
         """Claude records; Codex reads it back from GitHub, not from a cache."""
         issue = self.create_issue(risk="low", evidence=False)
-        self.rh_json(["work", "start", str(issue)])
+        self.start_work(issue)
         self.rh_json(["record", "checkpoint", "--body", "### Next Action\nhand over to the other agent"])
 
         # The harness is committed like any other repository content, so a
         # fresh clone is self-contained: no distribution repo, no global install.
         self.sandbox.git(self.repo, ["add", "-A"])
-        self.sandbox.git(self.repo, ["commit", "-q", "-m", "adopt research harness"])
+        self.sandbox.git(self.repo, ["commit", "-q", "-m", "adopt research harness"], check=False)
 
         other = self.sandbox.base / "second-clone"
         self.sandbox.run(["git", "clone", "-q", str(self.repo), str(other)], check=True)
@@ -357,7 +386,7 @@ class AgentSwitchTests(LifecycleTestCase):
 class NoDestructiveOperationsTests(LifecycleTestCase):
     def test_no_merge_force_push_or_deletion_is_ever_invoked(self):
         issue = self.create_issue(risk="low", evidence=False)
-        self.rh_json(["work", "start", str(issue)])
+        self.start_work(issue)
         self.rh_json(["record", "checkpoint", "--phase", "review", "--body", "### Next Action\ndone"])
         self.commit()
         self.rh(["ready"])
@@ -371,7 +400,7 @@ class NoDestructiveOperationsTests(LifecycleTestCase):
         issue = self.create_issue(risk="low", evidence=False)
         self.commit("a.py", "# a\n", "commit a")
         before = self.sandbox.git(self.repo, ["log", "--all", "--format=%H"]).stdout.split()
-        self.rh_json(["work", "start", str(issue)])
+        self.start_work(issue)
         self.rh_json(["record", "checkpoint", "--body", "### Next Action\nx"])
         after = self.sandbox.git(self.repo, ["log", "--all", "--format=%H"]).stdout.split()
         self.assertTrue(set(before) <= set(after), "no commit may disappear")
@@ -439,6 +468,11 @@ class NextCommandGuidanceTests(LifecycleTestCase):
         self.assertIn(f"work start {issue}", self.rh_json(["status"])["next_command"])
 
         self.rh_json(["work", "start", str(issue)])
+        # No PR yet — the branch has no commits, so that is the next step.
+        self.assertEqual(self.rh_json(["status"])["next_command"], "rh pr create")
+        self.commit("probe.py", "# probe\n", "begin work")
+        self.sandbox.git(self.repo, ["push", "-q", "origin", "HEAD"])
+        self.rh_json(["pr", "create"])
         self.assertIn("record result", self.rh_json(["status"])["next_command"])
 
         self.rh_json(["record", "result", "--body", "### Observation\nx"])
@@ -446,7 +480,7 @@ class NextCommandGuidanceTests(LifecycleTestCase):
 
     def test_terminal_state_explains_why_there_is_no_command(self):
         issue = self.create_issue(risk="low", evidence=False)
-        self.rh_json(["work", "start", str(issue)])
+        self.start_work(issue)
         self.rh_json(["record", "checkpoint", "--phase", "review", "--body", "### Next Action\ndone"])
         payload = self.rh_json(["status"])
         self.assertEqual(payload["state"]["state"], "READY_TO_MERGE")
@@ -469,7 +503,7 @@ class StructuralReadyTests(LifecycleTestCase):
         self.issue = self.create_issue()
         self.rh_json(["work", "link", str(self.issue)])
         self.pass_gate(self.issue, "design")
-        self.work = self.rh_json(["work", "start", str(self.issue)])
+        self.work = self.start_work(self.issue)
         self.pass_gate(self.issue, "evidence")
         self.pass_gate(self.issue, "knowledge")
         self.rh_json(["record", "checkpoint", "--phase", "review", "--body", "### Blocked By\nnone"])
@@ -494,7 +528,7 @@ class StructuralReadyTests(LifecycleTestCase):
         self.commit()
         payload = json.loads(self.rh(["ready", "--json"]).stdout)
         self.assertFalse(payload["ready"])
-        self.assertTrue(any("Does NOT Establish" in b for b in payload["blockers"]))
+        self.assertTrue(any("does NOT establish" in b for b in payload["blockers"]))
 
     def test_unfilled_provenance_blocks(self):
         self.record_result(provenance=False)
@@ -526,7 +560,7 @@ class StructuralReadyTests(LifecycleTestCase):
 
     def test_low_risk_work_is_unaffected(self):
         number = self.create_issue(title="Rename helper", kind="refactor", risk="low", evidence=False)
-        self.rh_json(["work", "start", str(number)])
+        self.start_work(number, seed="rename.py")
         self.rh_json(["record", "checkpoint", "--phase", "review", "--body", "### Blocked By\nnone"])
         self.commit("helper.py", "# helper\n", "rename")
         self.assertTrue(self.rh_json(["ready"])["ready"])

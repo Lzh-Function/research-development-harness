@@ -638,7 +638,7 @@ read-only で、`--offline` でも local cache から動きます。
 
 | Command | いつ使うか |
 |---|---|
-| `rh status` | 「今どうなってる？」と思ったとき。まず最初にこれ |
+| `rh status` | 「今どうなってる？」と思ったとき。まず最初にこれ。**次に打つべきコマンドも出ます** |
 | `rh resume` | session 開始時、AI を切り替えた後、状況が分からなくなったとき |
 | `rh log` | 「この研究、これまでに何が分かった？」と俯瞰したいとき |
 | `rh record checkpoint` | 作業の区切り、AI 切替前、長時間実験の前後、中断時、context 圧縮前 |
@@ -670,6 +670,30 @@ rh log --grep leakage --full    # 該当する record を全文で
 
 論文を書き始めるとき、共同研究者に経緯を説明するとき、`--kind result` で「支持されなかったものも含めた全結果」を出せるのが効きます。`--offline` でも local cache から動きます。
 
+### 研究の問い（Research Question）
+
+| Command | いつ使うか |
+|---|---|
+| `rh rq create` | 長期の問いを立てるとき。work はこの下にぶら下がる |
+| `rh rq list` | どんな問いを抱えているか一覧する |
+| `rh rq show <n>` | **その問いについて今どこまで言えるか**を集約して見る |
+| `rh log --rq <n>` | その問いに紐づく作業の履歴だけを追う |
+
+```
+#1  [RQ] Does the RDH live E2E round-trip hold against real GitHub?
+      1 work unit(s)  — ready_to_merge 1
+
+#2  Live E2E: full work lifecycle against real GitHub
+      READY_TO_MERGE  (experiment/high)
+      supports          adopt 後の repository が repo-local runtime だけで実 GitHub と往復できること。
+      does not support  rate limit 下や大規模 repository での挙動。単一の試行から性能は言えない。
+
+These lines are reproduced from Result Records. What the question's
+answer now is, is for the researcher to decide — not for RDH.
+```
+
+`rq show` は Result Record の記述を**そのまま並べるだけ**で、問いへの答えを合成しません。それは研究者と Agent の仕事です。新しい作業を始める前にこれを見れば、**既に答えが出ている問いをもう一度やる**のを避けられます。
+
 ### 作業単位のライフサイクル
 
 | Command | いつ使うか |
@@ -680,8 +704,21 @@ rh log --grep leakage --full    # 該当する record を全文で
 | `rh record decision` | 作業の**意味**が変わり、研究者が決めたとき |
 | `rh record result` | 実験・解析が証拠を出したとき（支持されなくても） |
 | `rh record gate` | 4 つの Human Gate それぞれの後 |
+| `rh pr create` | 最初の commit を積んだ後に Draft PR を開くとき（下記参照） |
 | `rh pr update` | 仕上げに PR 本文を合成するとき |
 | `rh ready` | merge 可能か確認するとき |
+
+**`rh work start` の直後に Draft PR が開かないことがあります。** GitHub は commit が 1 つも無い branch に PR を作れないためで、`rh work start` はそれを検知して「commit してから `rh pr create`」と案内します。branch も Work Issue との紐付けも既にできているので、失われるものはありません。
+
+**`rh ready` は evidence_required な作業に構造チェックをかけます。**
+
+```
+NOT READY_TO_MERGE:
+  - PR body does not say what this work does NOT establish
+    (the "Does NOT Establish" section is missing or empty)
+```
+
+見るのは「埋まっているか」だけで、内容の解釈はしません。Result Record の `Provenance`（commit / config / dataset / seed / run ID / artifact のいずれか）も同様です。**実装が終わったのに「何は言えないか」を一度も書いていない実験を merge 手前で止める**ためのもので、これが RDH の存在理由そのものです。`.research-harness/config.toml` の `[ready]` で無効化できます。
 
 ### 管理・診断
 
@@ -790,7 +827,7 @@ branch を分けてください（作業 A → branch A、作業 B → branch B�
 ./run-tests -q
 ```
 
-272 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
+318 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
 
 - authoritative な設計文書: [docs/SPEC.md](docs/SPEC.md)
 - 実装上の判断と意図的な差分: [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)

@@ -26,7 +26,16 @@ from .git import GitRepo, parse_github_remote
 from .github import GitHubClient, GitHubIssue, GitHubPR
 from .outbox import Outbox
 from .proc import CommandRunner, SubprocessRunner
-from .records import RQMarker, Record, WorkMarker, extract_section, headline, strip_markers
+from .records import (
+    RQMarker,
+    Record,
+    WorkMarker,
+    _clip,
+    _first_paragraph,
+    extract_section,
+    headline,
+    strip_markers,
+)
 from .state import LinkStore, WorkLink, derive_state, issue_from_branch
 from .util import atomic_write, iso_timestamp
 
@@ -79,17 +88,11 @@ _ISSUE_REF_RE = re.compile(r"\b(Closes|Fixes|Resolves|Refs)\s+#(\d+)", re.IGNORE
 def _work_headline(body: str, *, limit: int = 96) -> str:
     """Opening line for a Work Issue: its stated purpose, not its first heading."""
     for name in ("Purpose", "Research Question"):
-        text = extract_section(body, name)
-        if text:
-            for line in text.splitlines():
-                stripped = line.strip().lstrip("-*• ").strip()
-                if stripped and not stripped.startswith(("<!--", "|", "#")):
-                    return stripped if len(stripped) <= limit else stripped[: limit - 1] + "…"
-    for line in strip_markers(body or "").splitlines():
-        stripped = line.strip()
-        if stripped and not stripped.startswith(("#", "<!--", "|")):
-            return stripped if len(stripped) <= limit else stripped[: limit - 1] + "…"
-    return "work unit opened"
+        paragraph = _first_paragraph(extract_section(body, name) or "")
+        if paragraph:
+            return _clip(paragraph, limit)
+    paragraph = _first_paragraph(strip_markers(body or ""))
+    return _clip(paragraph, limit) if paragraph else "work unit opened"
 
 
 def _record_label(record: Record) -> str:

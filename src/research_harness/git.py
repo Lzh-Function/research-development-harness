@@ -295,6 +295,15 @@ class GitRepo:
         names.update(self.changed_paths())
         return sorted(names)
 
+    def commits_ahead(self, base: str, head: str = "HEAD") -> int | None:
+        """Commits on ``head`` that ``base`` does not have (``None`` if unknown)."""
+        if not base:
+            return None
+        result = self.run(["rev-list", "--count", f"{base}..{head}"])
+        if not result.ok or not result.out.strip().isdigit():
+            return None
+        return int(result.out.strip())
+
     def object_exists(self, sha: str) -> bool:
         if not sha:
             return False

@@ -127,6 +127,41 @@ Repaired`), never echoing an outcome already shown beside the kind. It is
 read-only with respect to the working tree and GitHub, but it does refresh
 `.git/research-harness/cache` so that a later `--offline` run still works.
 
+**Next command.** `rh status` reports the command that mechanically advances
+the current state. Gate outcomes are always rendered as the full choice
+(`passed|overridden`), never pre-selected: a CLI that suggested `passed` would
+hollow out the gate it was meant to protect.
+
+**Structural checks at `rh ready`.** For work declared `evidence_required`,
+the PR body's *Does NOT Establish* section and every Result Record's
+*Provenance* must actually be filled in. Presence is not enough — templates
+ship HTML-comment prompts and empty `- key:` lines, so "the section exists" is
+no evidence anyone wrote in it. The checks read whether, never what. They are
+disabled per project under `[ready]` in `config.toml`, and an unreadable PR
+body (offline) downgrades to a warning: being offline must never block work
+the researcher has finished.
+
+**Research Questions.** The `rh:rq` marker was reserved in v0.1 but never
+written or read. `rh rq create|list|show` and `rh log --rq` now make the
+long-lived question a first-class object. `rq show` reproduces each Result
+Record's *Supports* / *Does NOT Support* lines verbatim and stops there;
+deciding what the question's answer now is belongs to the researcher.
+
+**Whether work has started.** Derived from a Draft PR existing, or from being
+on a branch other than the default — not from a branch link existing. `rh work
+link` is bookkeeping (it attaches an issue so records can be written); treating
+it as "work started" pushed a work unit from READY to VALIDATING before anyone
+had written a line. Across issues, the PR is found from the `Closes #n` /
+`Refs #n` line RDH writes into every PR body, so a fresh clone with no link
+store still reports correctly.
+
+**Draft PRs on empty branches.** GitHub refuses to open a pull request on a
+branch with no commits ahead of its base — precisely the state `rh work start`
+leaves a new branch in. This was invisible to the fake `gh` and only appeared
+in a live run. `rh work start` now detects it, says so plainly, and defers;
+`rh pr create` opens the PR after the first commit, and `rh status` points
+there.
+
 ## Platform assumptions, verified
 
 Checked against official documentation in September 2026 rather than assumed

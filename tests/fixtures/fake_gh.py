@@ -247,6 +247,25 @@ def issue_command(state, args):
     return 2
 
 
+def commits_ahead(base, head):
+    """Ask git the same question GitHub asks before opening a PR.
+
+    Real GitHub refuses `pr create` when the head branch has no commits ahead
+    of its base. The fake must refuse too, or tests encode a flow that cannot
+    happen — which is exactly how that defect reached a live run unnoticed.
+    """
+    import subprocess
+
+    for base_ref in (f"origin/{base}", base):
+        result = subprocess.run(
+            ["git", "rev-list", "--count", f"{base_ref}..{head}"],
+            capture_output=True, text=True, shell=False,
+        )
+        if result.returncode == 0 and result.stdout.strip().isdigit():
+            return int(result.stdout.strip())
+    return None
+
+
 def pr_command(state, args):
     action = args[1] if len(args) > 1 else ""
     if action == "create":
@@ -255,6 +274,13 @@ def pr_command(state, args):
         base = take(args, "--base") or state.get("default_branch", "main")
         draft = "--draft" in args
         body = body_of(args)
+        ahead = commits_ahead(base, head)
+        if ahead == 0:
+            sys.stderr.write(
+                "pull request create failed: GraphQL: No commits between %s and %s "
+                "(createPullRequest)\n" % (base, head)
+            )
+            return 1
         number = int(state["next_pr"])
         state["next_pr"] = number + 1
         state["prs"][str(number)] = {

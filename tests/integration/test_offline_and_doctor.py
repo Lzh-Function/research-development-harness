@@ -28,7 +28,14 @@ class AdoptedRepoTestCase(SandboxTestCase):
             ["issue", "create", "--title", "Probe", "--kind", "analysis", "--risk", risk, "--body", "## Purpose\n\nx"]
         )
         issue = payload["issue"]
-        self.rh_json(["work", "start", str(issue)])
+        started = self.rh_json(["work", "start", str(issue)])
+        if started.get("pr") is None:
+            # A branch with no commits cannot carry a pull request.
+            (self.repo / f"work_{issue}.py").write_text("# work\n", encoding="utf-8")
+            self.sandbox.git(self.repo, ["add", "-A"])
+            self.sandbox.git(self.repo, ["commit", "-q", "-m", f"begin work on #{issue}"])
+            self.sandbox.git(self.repo, ["push", "-q", "origin", "HEAD"])
+            self.rh_json(["pr", "create"])
         return issue
 
 

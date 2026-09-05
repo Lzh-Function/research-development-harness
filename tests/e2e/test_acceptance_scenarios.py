@@ -43,6 +43,10 @@ class ScenarioC_ExistingProjectMigration(ScenarioTestCase):
         self.sandbox.git(self.repo, ["switch", "-q", "-c", "sweep-v3"])
         self.sandbox.git(self.repo, ["switch", "-q", "-c", "abandoned-idea"])
         self.sandbox.git(self.repo, ["switch", "-q", "sweep-v3"])
+        # An in-flight branch has history of its own, plus uncommitted edits.
+        (self.repo / "experiments" / "sweep_v3_config.yaml").write_text("lr: 0.001\n", encoding="utf-8")
+        self.sandbox.git(self.repo, ["add", "-A"])
+        self.sandbox.git(self.repo, ["commit", "-q", "-m", "sweep v3 config"])
         (self.repo / "experiments" / "sweep_v3.py").write_text("# in-flight edit\n", encoding="utf-8")
 
     def test_migration_is_overlay_not_reconstruction(self):
@@ -83,6 +87,7 @@ class ScenarioC_ExistingProjectMigration(ScenarioTestCase):
         self.rh_json(self.repo, ["record", "gate", "--gate", "design", "--outcome", "passed", "--body", "### Outcome\npassed"])
         payload = self.rh_json(self.repo, ["work", "start", str(issue), "--existing-branch", "sweep-v3"])
         self.assertEqual(payload["branch"], "sweep-v3")
+        self.assertIsNotNone(payload["pr"], "an existing branch already has commits, so its PR opens at once")
         self.assertIn("sweep-v3", self.sandbox.git(self.repo, ["branch", "--format=%(refname:short)"]).stdout.split())
         self.assertEqual((self.repo / "experiments" / "sweep_v3.py").read_text(encoding="utf-8"), "# in-flight edit\n")
 
@@ -105,9 +110,12 @@ class ScenarioH_KnowledgeGate(ScenarioTestCase):
         self.rh_json(self.repo, ["work", "link", str(self.issue)])
         self.rh_json(self.repo, ["record", "gate", "--gate", "design", "--outcome", "passed", "--body", "### Outcome\npassed"])
         self.rh_json(self.repo, ["work", "start", str(self.issue)])
+        # A new branch has no commits, so the Draft PR opens after the first one.
         (self.repo / "probe.py").write_text("# probe\n", encoding="utf-8")
         self.sandbox.git(self.repo, ["add", "-A"])
         self.sandbox.git(self.repo, ["commit", "-q", "-m", "probe"])
+        self.sandbox.git(self.repo, ["push", "-q", "origin", "HEAD"])
+        self.rh_json(self.repo, ["pr", "create"])
         self.rh_json(self.repo, ["record", "checkpoint", "--phase", "review", "--body", "### Blocked By\nnone\n\n### Next Action\nsynthesise"])
 
     def test_blocked_knowledge_gate_prevents_ready(self):

@@ -408,29 +408,52 @@ HEADLINE_SECTIONS: dict[str, tuple[str, ...]] = {
 }
 
 
+def _first_paragraph(text: str, *, skip: set[str] = frozenset()) -> str:
+    """Join the first paragraph into one line.
+
+    Markdown prose is hard-wrapped, so taking the first *line* truncates a
+    sentence at whatever column the author happened to wrap at.
+    """
+    collected: list[str] = []
+    for line in (text or "").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            if collected:
+                break
+            continue
+        if stripped.startswith(("<!--", "|", "#")):
+            if collected:
+                break
+            continue
+        bare = stripped.lstrip("-*• ").strip()
+        if not bare or bare.lower() in skip:
+            continue
+        collected.append(bare)
+        if bare.endswith(("。", ".", "!", "?", "！", "？")):
+            break
+    return " ".join(collected)
+
+
+def _clip(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
 def headline(record: "Record", *, limit: int = 96) -> str:
     """One line summarising a record, for cross-issue listings.
 
     Prefers the section that carries the point of that record kind; falls back
-    to the first non-heading line so an off-template record still shows
-    something rather than nothing.
+    to the first paragraph so an off-template record still shows something
+    rather than nothing.
     """
     for name in HEADLINE_SECTIONS.get(record.kind, ()):
         text = extract_section(record.body, name)
         if text:
-            for line in text.splitlines():
-                stripped = line.strip().lstrip("-*• ").strip()
-                if stripped and not stripped.startswith(("<!--", "|", "#")):
-                    return stripped if len(stripped) <= limit else stripped[: limit - 1] + "…"
+            paragraph = _first_paragraph(text)
+            if paragraph:
+                return _clip(paragraph, limit)
+    # The outcome is already shown next to the record kind; don't echo it.
     echoed = {value.lower() for value in (record.outcome, record.status) if value}
-    for line in (record.body or "").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith(("#", "<!--", "|")):
-            continue
-        if stripped.lower() in echoed:
-            continue  # the outcome is already shown next to the record kind
-        return stripped if len(stripped) <= limit else stripped[: limit - 1] + "…"
-    return ""
+    return _clip(_first_paragraph(record.body or "", skip=echoed), limit)
 
 
 def latest(records: list[Record], kind: str | None = None) -> Record | None:

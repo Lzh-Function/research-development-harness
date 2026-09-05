@@ -297,7 +297,13 @@ class StructuralReadyChecks(unittest.TestCase):
 
     def test_placeholder_does_not_establish_blocks(self):
         problems, _ = self.check(pr_body=EMPTY_PR_BODY)
-        self.assertTrue(any("still empty" in p for p in problems))
+        self.assertTrue(any("does NOT establish" in p for p in problems))
+
+    def test_missing_and_empty_report_the_same_failure(self):
+        """To the researcher both mean: the limits were never stated."""
+        missing, _ = self.check(pr_body="## Purpose\n\nx\n")
+        empty, _ = self.check(pr_body=EMPTY_PR_BODY)
+        self.assertEqual(missing, empty)
 
     def test_filled_does_not_establish_passes(self):
         self.assertEqual(self.check()[0], [])

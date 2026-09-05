@@ -30,6 +30,18 @@ class RQTestCase(SandboxTestCase):
     def make_rq(self, title):
         return self.rh_json(["rq", "create", "--title", title])["rq"]
 
+    def start_work(self, issue, *, seed=None):
+        """Branch, first commit, then the Draft PR — as GitHub requires."""
+        payload = self.rh_json(["work", "start", str(issue)])
+        if payload.get("pr") is None:
+            name = seed or f"work_{issue}.py"
+            (self.repo / name).write_text(f"# work on #{issue}\n", encoding="utf-8")
+            self.sandbox.git(self.repo, ["add", "-A"])
+            self.sandbox.git(self.repo, ["commit", "-q", "-m", f"begin work on #{issue}"])
+            self.sandbox.git(self.repo, ["push", "-q", "origin", "HEAD"])
+            payload = {**payload, **self.rh_json(["pr", "create"])}
+        return payload
+
     def make_work(self, title, *, rq=None, records=(), evidence=True, risk="high", kind="experiment"):
         args = ["issue", "create", "--title", title, "--kind", kind, "--risk", risk,
                 "--body", f"## Purpose\n\n{title}"]
@@ -172,7 +184,7 @@ class RQStateSourceTests(RQTestCase):
             (["gate", "--gate", "design", "--outcome", "passed"], "### Outcome\npassed")])
         unstarted = self.make_work("Not started", rq=rq, records=[
             (["gate", "--gate", "design", "--outcome", "passed"], "### Outcome\npassed")])
-        self.rh_json(["work", "start", str(started)])
+        self.start_work(started)
 
         payload = self.rh_json(["rq", "show", str(rq)])
         states = {u["issue"]: u["state"] for u in payload["work_units"]}
@@ -187,9 +199,9 @@ class RQStateSourceTests(RQTestCase):
         rq = self.make_rq("Q")
         issue = self.make_work("Started work", rq=rq, records=[
             (["gate", "--gate", "design", "--outcome", "passed"], "### Outcome\npassed")])
-        self.rh_json(["work", "start", str(issue)])
+        self.start_work(issue)
         self.sandbox.git(self.repo, ["add", "-A"])
-        self.sandbox.git(self.repo, ["commit", "-q", "-m", "adopt"])
+        self.sandbox.git(self.repo, ["commit", "-q", "-m", "adopt"], check=False)
 
         other = self.sandbox.base / "clone"
         self.sandbox.run(["git", "clone", "-q", str(self.repo), str(other)], check=True)
