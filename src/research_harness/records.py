@@ -224,6 +224,38 @@ def parse_record(comment_body: str, *, comment_id: str | None = None, url: str |
 
 
 @dataclass
+class RQMarker:
+    """Marker on a Research Question Issue (SPEC 21).
+
+    A Research Question is the long-lived thing a project is actually about;
+    Work Issues are the attempts on it. Marking them explicitly is what lets
+    `rh rq show` gather a question's evidence without guessing from titles.
+    """
+
+    schema: int = RECORD_SCHEMA_VERSION
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    def payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {"schema": self.schema}
+        payload.update(self.extra)
+        return payload
+
+    def render(self) -> str:
+        return render_marker(RQ_TAG, self.payload())
+
+    @classmethod
+    def parse(cls, issue_body: str) -> "RQMarker | None":
+        payload = parse_marker(issue_body, RQ_TAG)
+        if payload is None:
+            return None
+        schema = payload.get("schema", RECORD_SCHEMA_VERSION)
+        return cls(
+            schema=int(schema) if str(schema).isdigit() else RECORD_SCHEMA_VERSION,
+            extra={k: v for k, v in payload.items() if k != "schema"},
+        )
+
+
+@dataclass
 class WorkMarker:
     """Machine marker embedded at the top of a Work Issue body (SPEC 21)."""
 
@@ -302,6 +334,48 @@ def extract_section(markdown: str, name: str) -> str | None:
             break
         collected.append(line)
     return "\n".join(collected).strip() or None
+
+
+def is_placeholder(text: str | None) -> bool:
+    """True when a section is present but carries no researcher content.
+
+    Templates ship HTML-comment prompts and empty ``- key:`` provenance lines,
+    so "the section exists" is not evidence that anyone filled it in.
+    """
+    if not text:
+        return True
+    stripped = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+    meaningful: list[str] = []
+    for line in stripped.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        bare = line.lstrip("-*• ").strip()
+        if not bare:
+            continue
+        # `- commit:` with nothing after the colon is an unfilled template slot.
+        if bare.endswith(":"):
+            continue
+        if bare in {"-", "—", "n/a", "N/A", "TBD", "tbd", "..."}:
+            continue
+        meaningful.append(bare)
+    return not meaningful
+
+
+def filled_fields(text: str | None) -> dict[str, str]:
+    """Parse ``- key: value`` lines, keeping only those with a value."""
+    out: dict[str, str] = {}
+    if not text:
+        return out
+    for line in re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL).splitlines():
+        bare = line.strip().lstrip("-*• ").strip()
+        if ":" not in bare:
+            continue
+        key, _, value = bare.partition(":")
+        key, value = key.strip(), value.strip()
+        if key and value:
+            out[key.lower()] = value
+    return out
 
 
 def sections(markdown: str) -> dict[str, str]:

@@ -131,6 +131,9 @@ class Config:
     knowledge_gate_from: str = "medium"
     #: Issue label applied to Work Issues (empty disables labelling).
     work_label: str = ""
+    #: Structural checks on evidence-required work at `rh ready` (SPEC 15/23).
+    require_does_not_establish: bool = True
+    require_provenance: bool = True
     raw: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -147,6 +150,10 @@ class Config:
                 "evidence_from": self.evidence_gate_from,
                 "knowledge_from": self.knowledge_gate_from,
             },
+            "ready": {
+                "require_does_not_establish": self.require_does_not_establish,
+                "require_provenance": self.require_provenance,
+            },
         }
 
     def render(self) -> str:
@@ -156,7 +163,11 @@ class Config:
             "#\n"
             "# gates.*_from: lowest work risk at which that Human Gate is required\n"
             "#               (low | medium | high). Gates can always be overridden\n"
-            "#               by the researcher with an explicit Gate Record.\n\n"
+            "#               by the researcher with an explicit Gate Record.\n"
+            "#\n"
+            "# ready.*: structural checks applied by `rh ready`, and only to work\n"
+            "#          declared evidence_required. They check that a section was\n"
+            "#          filled in at all, never what it says.\n\n"
         )
         return header + render_toml(self.to_dict())
 
@@ -166,6 +177,7 @@ class Config:
         github = data.get("github") or {}
         work = data.get("work") or {}
         gates = data.get("gates") or {}
+        ready = data.get("ready") or {}
         repo = str(github.get("repo", "")).strip()
         return cls(
             project_name=str(project.get("name", "")),
@@ -177,6 +189,8 @@ class Config:
             evidence_gate_from=str(gates.get("evidence_from", "medium")),
             knowledge_gate_from=str(gates.get("knowledge_from", "medium")),
             work_label=str(work.get("label", "")),
+            require_does_not_establish=bool(ready.get("require_does_not_establish", True)),
+            require_provenance=bool(ready.get("require_provenance", True)),
             raw=data,
         )
 

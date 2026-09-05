@@ -10,11 +10,14 @@ import support  # noqa: F401,E402
 from research_harness.config import Config  # noqa: E402
 from research_harness.records import Record, WorkMarker  # noqa: E402
 from research_harness.state import (  # noqa: E402
+    STATES,
     branch_name,
     checkpoint_phase,
     derive_state,
     gate_satisfied,
     issue_from_branch,
+    next_command,
+    next_command_note,
     pending_gates,
     ready_blockers,
 )
@@ -188,9 +191,50 @@ class RecordOrderingTests(unittest.TestCase):
         self.assertNotIn("deviation", pending_gates(records, Config(), WorkMarker(risk="medium")))
 
 
+GOOD_PR_BODY = """## Purpose
+
+x
+
+## Does NOT Establish
+
+情報が失われていること。probe 容量が固定のため区別できない。
+"""
+
+EMPTY_PR_BODY = """## Purpose
+
+x
+
+## Does NOT Establish
+
+<!-- filled in by rh-finish -->
+"""
+
+PROVENANCE = """### Observation
+
+AUROC 0.52
+
+### Provenance
+
+- commit: abc1234
+- configuration: configs/probe_v2.yaml
+- seed: 0-4
+"""
+
+EMPTY_PROVENANCE = """### Observation
+
+AUROC 0.52
+
+### Provenance
+
+- commit:
+- configuration:
+- seed:
+"""
+
+
 class ReadyTests(unittest.TestCase):
     def test_lists_every_missing_precondition(self):
-        problems = ready_blockers(
+        problems, _ = ready_blockers(
             config=Config(),
             marker=WorkMarker(risk="high", evidence_required=True),
             records=[],
@@ -209,17 +253,119 @@ class ReadyTests(unittest.TestCase):
             gate("design", "passed"),
             gate("evidence", "passed"),
             gate("knowledge", "passed"),
-            Record(kind="result", issue=1),
+            Record(kind="result", issue=1, body=PROVENANCE),
             checkpoint(phase="review", body="### Blocked By\nnone"),
         ]
-        problems = ready_blockers(
+        problems, warnings = ready_blockers(
             config=Config(),
             marker=WorkMarker(risk="high", evidence_required=True),
             records=records,
             pr=9,
             dirty=False,
+            pr_body=GOOD_PR_BODY,
         )
         self.assertEqual(problems, [])
+        self.assertEqual(warnings, [])
+
+
+class StructuralReadyChecks(unittest.TestCase):
+    """Evidence-required work must state its limits and its provenance."""
+
+    def complete_records(self, result_body=PROVENANCE):
+        return [
+            gate("design", "passed"),
+            gate("evidence", "passed"),
+            gate("knowledge", "passed"),
+            Record(kind="result", issue=1, body=result_body),
+            checkpoint(phase="review", body="### Blocked By\nnone"),
+        ]
+
+    def check(self, *, config=None, evidence=True, result_body=PROVENANCE, pr_body=GOOD_PR_BODY, available=True):
+        return ready_blockers(
+            config=config or Config(),
+            marker=WorkMarker(risk="high", evidence_required=evidence),
+            records=self.complete_records(result_body),
+            pr=9,
+            dirty=False,
+            pr_body=pr_body,
+            pr_body_available=available,
+        )
+
+    def test_missing_does_not_establish_blocks(self):
+        problems, _ = self.check(pr_body="## Purpose\n\nx\n")
+        self.assertTrue(any("Does NOT Establish" in p for p in problems))
+
+    def test_placeholder_does_not_establish_blocks(self):
+        problems, _ = self.check(pr_body=EMPTY_PR_BODY)
+        self.assertTrue(any("still empty" in p for p in problems))
+
+    def test_filled_does_not_establish_passes(self):
+        self.assertEqual(self.check()[0], [])
+
+    def test_empty_provenance_blocks(self):
+        problems, _ = self.check(result_body=EMPTY_PROVENANCE)
+        self.assertTrue(any("Provenance" in p for p in problems))
+
+    def test_missing_provenance_section_blocks(self):
+        problems, _ = self.check(result_body="### Observation\n\nAUROC 0.52")
+        self.assertTrue(any("Provenance" in p for p in problems))
+
+    def test_partially_filled_provenance_passes(self):
+        """One real field beats six empty ones; RDH does not police thoroughness."""
+        body = "### Provenance\n\n- commit:\n- run ID: slurm-88213\n- seed:"
+        self.assertEqual(self.check(result_body=body)[0], [])
+
+    def test_low_risk_work_is_untouched(self):
+        """The checks exist for evidence, not for every change."""
+        problems, _ = self.check(evidence=False, pr_body="## Purpose\n\nx", result_body="no provenance")
+        self.assertEqual(problems, [])
+
+    def test_config_can_disable_each_check(self):
+        relaxed = Config(require_does_not_establish=False, require_provenance=False)
+        problems, _ = self.check(config=relaxed, pr_body=EMPTY_PR_BODY, result_body=EMPTY_PROVENANCE)
+        self.assertEqual(problems, [])
+
+    def test_unavailable_pr_body_warns_instead_of_blocking(self):
+        """Being offline must never block work the researcher has finished."""
+        problems, warnings = self.check(pr_body=None, available=False)
+        self.assertEqual(problems, [])
+        self.assertTrue(any("not checked" in w for w in warnings))
+
+
+class NextCommandTests(unittest.TestCase):
+    """The mechanical next step — never a decision on the researcher's behalf."""
+
+    def test_every_state_is_covered(self):
+        for state in STATES:
+            with self.subTest(state=state):
+                command = next_command(state, issue=7)
+                note = next_command_note(state)
+                self.assertTrue(command or note, f"{state} offers neither a command nor a reason")
+
+    def test_terminal_states_offer_no_command(self):
+        for state in ("READY_TO_MERGE", "DONE", "DEFERRED", "ABANDONED", "BLOCKED"):
+            with self.subTest(state=state):
+                self.assertIsNone(next_command(state, issue=7))
+                self.assertTrue(next_command_note(state))
+
+    def test_ready_to_merge_says_the_researcher_merges(self):
+        self.assertIn("researcher merges", next_command_note("READY_TO_MERGE"))
+
+    def test_gate_outcomes_are_offered_as_choices_not_chosen(self):
+        """A CLI that pre-selected `passed` would hollow out the gate."""
+        for state in ("DESIGN_GATE", "EVIDENCE_GATE", "KNOWLEDGE_GATE"):
+            with self.subTest(state=state):
+                command = next_command(state, issue=7)
+                self.assertIn("|", command, "the outcome must remain a choice")
+                self.assertIn("passed", command)
+
+    def test_issue_number_is_substituted(self):
+        self.assertIn("start 7", next_command("READY", issue=7))
+        self.assertIn("<issue>", next_command("READY"))
+
+    def test_unknown_state_is_not_an_error(self):
+        self.assertIsNone(next_command("NONSENSE"))
+        self.assertIsNone(next_command_note("NONSENSE"))
 
 
 class BranchNamingTests(unittest.TestCase):

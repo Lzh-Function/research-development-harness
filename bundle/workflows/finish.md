@@ -11,6 +11,18 @@ Read `_common.md` and `policy/human-gates.md` (Gate D) first.
 It lists the deterministic blockers: missing Draft PR, pending gates, missing
 Result Record when evidence is required, missing checkpoint, uncommitted work.
 
+For work declared `evidence_required`, two structural checks also apply:
+
+* the PR body's **Does NOT Establish** section must actually be filled in;
+* every Result Record must have at least one filled **Provenance** field
+  (commit, configuration, dataset, seed, run ID or artifact).
+
+They check that you wrote something, never what you wrote. They exist because
+an experiment that reaches READY_TO_MERGE without ever stating its limits, or
+without a pointer to the run that produced its numbers, is exactly the
+cognitive debt this harness is for. A project can turn them off in
+`.research-harness/config.toml` under `[ready]`.
+
 ## 2. Synthesise the PR body
 
 Use `templates/pull-request.md` and update the Draft PR:

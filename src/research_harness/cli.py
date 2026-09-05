@@ -40,11 +40,14 @@ from .records import (
     RISK_LEVELS,
     WORK_KINDS,
     Record,
+    RQMarker,
     WorkMarker,
     extract_section,
 )
 from .state import (
     PHASES,
+    next_command,
+    next_command_note,
     WorkLink,
     branch_name,
     derive_state,
@@ -54,7 +57,7 @@ from .state import (
     ready_blockers,
 )
 from .upgrade import upgrade
-from .util import dumps_pretty
+from .util import dumps_pretty, first_line
 
 PROG = "rh"
 
@@ -330,6 +333,8 @@ def _gather_work(session: Session, *, refresh: bool = True) -> dict[str, Any]:
     if link is None:
         derived = derive_state(config=session.config, issue=None)
         result["state"] = derived.to_dict()
+        result["next_command"] = next_command(derived.state)
+        result["next_command_note"] = next_command_note(derived.state)
         return result
 
     issue_obj = session.issue(link.issue)
@@ -340,17 +345,25 @@ def _gather_work(session: Session, *, refresh: bool = True) -> dict[str, Any]:
     if issue_obj is not None:
         session.cache_records(link.issue, records, issue_obj=issue_obj)
 
+    # "Work has started" is a Draft PR, or being on a branch of one's own.
+    # Merely running `rh work link` on the default branch to attach an issue
+    # must not advance the state: linking is bookkeeping, not starting.
+    default_branch = context.default_branch
+    branch = context.branch
+    started = pr_number is not None or bool(branch and default_branch and branch != default_branch)
     derived = derive_state(
         config=session.config,
         issue=link.issue,
         issue_state=issue_obj.state if issue_obj else None,
         marker=marker,
         records=records,
-        branch_linked=True,
+        branch_linked=started,
         pr=pr_number,
         pr_state=pr_obj.state if pr_obj else None,
     )
     checkpoint = latest_checkpoint(records)
+    result["next_command"] = next_command(derived.state, issue=link.issue, pr=pr_number)
+    result["next_command_note"] = next_command_note(derived.state)
     result.update(
         {
             "issue": {
@@ -417,6 +430,10 @@ def cmd_status(args: argparse.Namespace) -> int:
     row("Pending Gates", ", ".join(work["pending_gates"]) or "(none)")
     row("Blockers", "; ".join(work["blockers"]) or "(none)")
     row("Next Recorded Action", work["next_action"] or "(none)")
+    if work.get("next_command"):
+        row("Next Command", work["next_command"])
+    elif work.get("next_command_note"):
+        row("Next Command", f"(none — {work['next_command_note']})")
     if context["outbox_pending"]:
         row("Outbox", f"{context['outbox_pending']} pending — run `rh sync`")
     if work["records_source"] == "cache":
@@ -510,6 +527,7 @@ def cmd_log(args: argparse.Namespace) -> int:
         state=args.state,
         limit_issues=args.limit_issues,
         include_work=not args.no_work,
+        rq=args.rq,
     )
     selected = [entry for entry in entries if _matches(entry, args)]
     if args.reverse:
@@ -586,6 +604,96 @@ def cmd_issue_create(args: argparse.Namespace) -> int:
     else:
         emit(f"created Work Issue #{issue.number}: {issue.url}")
         emit("Next: take the Design Gate if required, then `rh work start %d`." % issue.number)
+    return 0
+
+
+def cmd_rq_create(args: argparse.Namespace) -> int:
+    session = make_session(args)
+    body = read_body(args, required=False, what="Research Question body")
+    if not body.strip() and session.installation:
+        template = session.installation.templates_dir / "research-question.md"
+        if template.exists():
+            body = template.read_text(encoding="utf-8")
+    title = args.title if args.title.startswith("[RQ]") else f"[RQ] {args.title}"
+    full_body = f"{RQMarker().render()}\n\n{body.strip()}\n"
+    labels = list(args.label or [])
+    if args.dry_run:
+        payload = {"dry_run": True, "title": title, "labels": labels, "body": full_body}
+        emit_json(payload) if args.json else emit(f"[dry-run] would create Research Question: {title}\n\n{full_body}")
+        return 0
+    issue = session.github.issue_create(title, full_body, labels=labels)
+    if args.json:
+        emit_json({"rq": issue.number, "url": issue.url, "title": title})
+    else:
+        emit(f"created Research Question #{issue.number}: {issue.url}")
+        emit(f"Link work to it with: rh issue create --rq {issue.number} ...")
+    return 0
+
+
+def cmd_rq_list(args: argparse.Namespace) -> int:
+    session = make_session(args)
+    questions = session.research_questions(state=args.state)
+    pairs = session.work_issues(state="all")
+    counts: dict[int, int] = {}
+    for _issue, marker in pairs:
+        if marker.rq is not None:
+            counts[marker.rq] = counts.get(marker.rq, 0) + 1
+    payload = [
+        {
+            "rq": issue.number,
+            "title": issue.title,
+            "state": issue.state,
+            "url": issue.url,
+            "work_units": counts.get(issue.number, 0),
+        }
+        for issue in questions
+    ]
+    if args.json:
+        emit_json({"research_questions": payload})
+        return 0
+    if not payload:
+        emit("no Research Question issues found")
+        emit("Create one with: rh rq create --title \"...\"")
+        return 0
+    for item in payload:
+        emit(f"#{item['rq']}  {item['title']}")
+        emit(f"      {item['work_units']} work unit(s)  [{item['state'].lower()}]")
+    return 0
+
+
+def cmd_rq_show(args: argparse.Namespace) -> int:
+    session = make_session(args)
+    summary = session.rq_summary(args.rq, state=args.state)
+    if args.json:
+        emit_json(summary)
+        return 0
+    title = summary["title"] or "(unknown)"
+    emit(f"#{summary['rq']}  {title}")
+    if not summary["is_research_question"]:
+        emit("  note: this issue carries no rh:rq marker; treating it as one anyway")
+    counts = ", ".join(f"{state.lower()} {count}" for state, count in sorted(summary["counts"].items()))
+    emit(f"      {len(summary['work_units'])} work unit(s){('  — ' + counts) if counts else ''}")
+    if not summary["work_units"]:
+        emit("")
+        emit("No work units reference this question yet.")
+        emit(f"Link one with: rh issue create --rq {summary['rq']} ...")
+        return 0
+    for unit in summary["work_units"]:
+        emit("")
+        emit(f"#{unit['issue']}  {unit['title']}")
+        pending = ", ".join(unit["pending_gates"])
+        emit(f"      {unit['state']}  ({unit['kind']}/{unit['risk']}){('  pending: ' + pending) if pending else ''}")
+        if not unit["results"]:
+            emit("      (no Result Record yet)")
+            continue
+        for result in unit["results"]:
+            if result["supports"]:
+                emit(f"      supports          {first_line(result['supports'])}")
+            if result["does_not_support"]:
+                emit(f"      does not support  {first_line(result['does_not_support'])}")
+    emit("")
+    emit("These lines are reproduced from Result Records. What the question's")
+    emit("answer now is, is for the researcher to decide — not for RDH.")
     return 0
 
 
@@ -813,12 +921,17 @@ def cmd_ready(args: argparse.Namespace) -> int:
     records, _ = session.records(link.issue, refresh=not session.offline)
     marker = session.work_marker(issue_obj, link)
     pr_number = link.pr or session.resolve_pr(link)
-    problems = ready_blockers(
+    pr_obj = session.pull_request(pr_number)
+    problems, warnings = ready_blockers(
         config=session.config,
         marker=marker,
         records=records,
         pr=pr_number,
         dirty=session.git.is_dirty(),
+        pr_body=pr_obj.body if pr_obj else None,
+        # Offline must never be a reason to block: report that the check could
+        # not run, rather than failing work the researcher may have finished.
+        pr_body_available=pr_obj is not None,
     )
     payload = {
         "issue": link.issue,
@@ -826,6 +939,7 @@ def cmd_ready(args: argparse.Namespace) -> int:
         "ready": not problems,
         "state": "READY_TO_MERGE" if not problems else "NOT_READY",
         "blockers": problems,
+        "warnings": warnings,
     }
     if args.json:
         emit_json(payload)
@@ -837,6 +951,8 @@ def cmd_ready(args: argparse.Namespace) -> int:
         else:
             emit("READY_TO_MERGE")
             emit("The researcher merges. RDH never runs `gh pr merge`.")
+        for warning in warnings:
+            emit(f"  warning: {warning}")
     return 0 if not problems else 3
 
 
@@ -911,6 +1027,7 @@ def build_parser() -> argparse.ArgumentParser:
     log_parser.add_argument("--outcome", action="append", choices=GATE_OUTCOMES, help="repeatable")
     log_parser.add_argument("--status", action="append", choices=DECISION_STATUSES, help="repeatable")
     log_parser.add_argument("--issue", action="append", type=int, help="restrict to these Work Issues")
+    log_parser.add_argument("--rq", type=int, help="restrict to work under this Research Question")
     log_parser.add_argument("--since", help="ISO date or prefix, e.g. 2026-06 or 2026-06-01")
     log_parser.add_argument("--until", help="ISO date or prefix (inclusive)")
     log_parser.add_argument("--grep", help="substring match on headline, body and issue title")
@@ -943,6 +1060,29 @@ def build_parser() -> argparse.ArgumentParser:
     issue_create.add_argument("--json", action="store_true")
     issue_create.add_argument("--dry-run", action="store_true")
     issue_create.set_defaults(func=cmd_issue_create)
+
+    rq_parser = subparsers.add_parser("rq", help="Research Question operations")
+    rq_sub = rq_parser.add_subparsers(dest="rq_command", required=True)
+
+    rq_create = rq_sub.add_parser("create", help="create a Research Question issue")
+    rq_create.add_argument("--title", required=True)
+    rq_create.add_argument("--body-file", dest="body_file")
+    rq_create.add_argument("--body")
+    rq_create.add_argument("--label", action="append", help="repeatable")
+    rq_create.add_argument("--json", action="store_true")
+    rq_create.add_argument("--dry-run", action="store_true")
+    rq_create.set_defaults(func=cmd_rq_create)
+
+    rq_list = rq_sub.add_parser("list", help="list Research Questions and their work units")
+    rq_list.add_argument("--state", default="all", choices=("open", "closed", "all"))
+    rq_list.add_argument("--json", action="store_true")
+    rq_list.set_defaults(func=cmd_rq_list)
+
+    rq_show = rq_sub.add_parser("show", help="what has been recorded under one Research Question")
+    rq_show.add_argument("rq", type=int)
+    rq_show.add_argument("--state", default="all", choices=("open", "closed", "all"))
+    rq_show.add_argument("--json", action="store_true")
+    rq_show.set_defaults(func=cmd_rq_show)
 
     work_parser = subparsers.add_parser("work", help="work unit lifecycle")
     work_sub = work_parser.add_subparsers(dest="work_command", required=True)

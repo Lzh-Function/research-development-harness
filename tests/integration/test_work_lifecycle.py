@@ -228,14 +228,21 @@ class RecordAndStateTests(LifecycleTestCase):
         """A hypothesis that was not supported is a finished experiment."""
         self.rh_json([
             "record", "result",
-            "--body", "### Observation\nno separation\n\n### Supports\nnothing\n\n### Does NOT Support\nthe chirality hypothesis",
+            "--body", "### Observation\nno separation\n\n### Supports\nnothing\n\n"
+                      "### Does NOT Support\nthe chirality hypothesis\n\n"
+                      "### Provenance\n- commit: abc1234\n- run ID: slurm-88213",
         ])
         self.pass_gate(self.issue, "evidence")
         self.rh_json(["record", "checkpoint", "--phase", "review", "--body", "### Next Action\nwrite up"])
         self.pass_gate(self.issue, "knowledge")
+        self.rh_json(["pr", "update", "--body-file", self.write(
+            "_pr.md",
+            "Refs #1\n\n## Purpose\n\nprobe\n\n## Does NOT Establish\n\n非線形保持の有無は区別できない。\n",
+        )])
+        (self.repo / "_pr.md").unlink()
         self.commit()
         payload = self.rh_json(["ready"])
-        self.assertTrue(payload["ready"])
+        self.assertTrue(payload["ready"], payload["blockers"])
         self.assertEqual(payload["state"], "READY_TO_MERGE")
 
     def test_blocked_checkpoint_surfaces_as_a_blocker(self):
@@ -412,3 +419,123 @@ class HumanOutputTests(LifecycleTestCase):
         self.assertEqual(result.stdout, "")
         self.assertIn("rh: ", result.stderr)
         self.assertIn("hint:", result.stderr)
+
+
+class NextCommandGuidanceTests(LifecycleTestCase):
+    """`rh status` must say what to do next, mechanically."""
+
+    def test_status_names_the_next_command_at_each_stage(self):
+        issue = self.create_issue()
+        self.rh_json(["work", "link", str(issue)])
+
+        payload = self.rh_json(["status"])
+        self.assertEqual(payload["state"]["state"], "DESIGN_GATE")
+        self.assertIn(f"--gate design", payload["next_command"])
+        self.assertIn(f"--issue {issue}", payload["next_command"])
+        self.assertIn("passed|overridden", payload["next_command"])
+        self.assertIn("Next Command", self.rh(["status"], check=True).stdout)
+
+        self.pass_gate(issue, "design")
+        self.assertIn(f"work start {issue}", self.rh_json(["status"])["next_command"])
+
+        self.rh_json(["work", "start", str(issue)])
+        self.assertIn("record result", self.rh_json(["status"])["next_command"])
+
+        self.rh_json(["record", "result", "--body", "### Observation\nx"])
+        self.assertIn("--gate evidence", self.rh_json(["status"])["next_command"])
+
+    def test_terminal_state_explains_why_there_is_no_command(self):
+        issue = self.create_issue(risk="low", evidence=False)
+        self.rh_json(["work", "start", str(issue)])
+        self.rh_json(["record", "checkpoint", "--phase", "review", "--body", "### Next Action\ndone"])
+        payload = self.rh_json(["status"])
+        self.assertEqual(payload["state"]["state"], "READY_TO_MERGE")
+        self.assertIsNone(payload["next_command"])
+        self.assertIn("researcher merges", payload["next_command_note"])
+        self.assertIn("(none —", self.rh(["status"], check=True).stdout)
+
+    def test_untracked_branch_still_offers_a_way_in(self):
+        self.sandbox.git(self.repo, ["switch", "-c", "unrelated"])
+        payload = self.rh_json(["status"])
+        self.assertEqual(payload["state"]["state"], "UNTRACKED")
+        self.assertIn("work link", payload["next_command"])
+
+
+class StructuralReadyTests(LifecycleTestCase):
+    """Evidence-required work must state its limits and its provenance."""
+
+    def setUp(self):
+        super().setUp()
+        self.issue = self.create_issue()
+        self.rh_json(["work", "link", str(self.issue)])
+        self.pass_gate(self.issue, "design")
+        self.work = self.rh_json(["work", "start", str(self.issue)])
+        self.pass_gate(self.issue, "evidence")
+        self.pass_gate(self.issue, "knowledge")
+        self.rh_json(["record", "checkpoint", "--phase", "review", "--body", "### Blocked By\nnone"])
+
+    def record_result(self, *, provenance=True):
+        body = "### Observation\nAUROC 0.52\n\n### Does NOT Support\n情報の消失"
+        if provenance:
+            body += "\n\n### Provenance\n- commit: abc1234\n- run ID: slurm-88213"
+        else:
+            body += "\n\n### Provenance\n- commit:\n- run ID:"
+        self.rh_json(["record", "result", "--body", body])
+
+    def set_pr_body(self, does_not_establish):
+        body = "Refs #1\n\n## Purpose\n\nprobe\n\n## Does NOT Establish\n\n" + does_not_establish
+        path = self.write("_pr.md", body)
+        self.rh_json(["pr", "update", "--body-file", path])
+        (self.repo / "_pr.md").unlink()
+
+    def test_empty_does_not_establish_blocks(self):
+        self.record_result()
+        self.set_pr_body("<!-- filled in by rh-finish -->\n")
+        self.commit()
+        payload = json.loads(self.rh(["ready", "--json"]).stdout)
+        self.assertFalse(payload["ready"])
+        self.assertTrue(any("Does NOT Establish" in b for b in payload["blockers"]))
+
+    def test_unfilled_provenance_blocks(self):
+        self.record_result(provenance=False)
+        self.set_pr_body("非線形保持は区別できない。\n")
+        self.commit()
+        payload = json.loads(self.rh(["ready", "--json"]).stdout)
+        self.assertFalse(payload["ready"])
+        self.assertTrue(any("Provenance" in b for b in payload["blockers"]))
+
+    def test_both_filled_passes(self):
+        self.record_result()
+        self.set_pr_body("非線形保持は区別できない。\n")
+        self.commit()
+        payload = self.rh_json(["ready"])
+        self.assertTrue(payload["ready"], payload["blockers"])
+
+    def test_config_can_disable_the_checks(self):
+        config = self.repo / ".research-harness" / "config.toml"
+        config.write_text(
+            config.read_text(encoding="utf-8")
+            .replace("require_does_not_establish = true", "require_does_not_establish = false")
+            .replace("require_provenance = true", "require_provenance = false"),
+            encoding="utf-8",
+        )
+        self.record_result(provenance=False)
+        self.set_pr_body("<!-- filled in by rh-finish -->\n")
+        self.commit()
+        self.assertTrue(self.rh_json(["ready"])["ready"])
+
+    def test_low_risk_work_is_unaffected(self):
+        number = self.create_issue(title="Rename helper", kind="refactor", risk="low", evidence=False)
+        self.rh_json(["work", "start", str(number)])
+        self.rh_json(["record", "checkpoint", "--phase", "review", "--body", "### Blocked By\nnone"])
+        self.commit("helper.py", "# helper\n", "rename")
+        self.assertTrue(self.rh_json(["ready"])["ready"])
+
+    def test_offline_warns_instead_of_blocking(self):
+        """Being unable to read the PR body must not stop finished work."""
+        self.record_result()
+        self.set_pr_body("非線形保持は区別できない。\n")
+        self.commit()
+        payload = self.rh_json(["--offline", "ready"])
+        self.assertTrue(payload["ready"])
+        self.assertTrue(any("not checked" in w for w in payload["warnings"]))

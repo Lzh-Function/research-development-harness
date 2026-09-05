@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import Config
-from .records import Record, WorkMarker, extract_section, latest
+from .records import Record, WorkMarker, extract_section, filled_fields, is_placeholder, latest
 from .util import atomic_write, iso_timestamp, slugify
 
 # Derived states (SPEC 32), ordered from least to most advanced.
@@ -283,6 +283,43 @@ def derive_state(
     return DerivedState("IN_PROGRESS", "implementation is under way", pending, blockers)
 
 
+#: Derived state → the mechanical next command. Deliberately *not* a
+#: recommendation about the research: gate outcomes are always offered as the
+#: full set of choices, never pre-selected, so the CLI cannot quietly decide a
+#: Human Gate on the researcher's behalf.
+def next_command(state: str, *, issue: int | None = None, pr: int | None = None) -> str | None:
+    """The command that mechanically advances this state, if there is one."""
+    number = str(issue) if issue is not None else "<issue>"
+    table: dict[str, str | None] = {
+        "UNTRACKED": f"rh work link {number}   (or scope new work first)",
+        "SCOPED": f"rh work start {number}",
+        "DESIGN_GATE": f"rh record gate --gate design --outcome passed|overridden --issue {number}",
+        "READY": f"rh work start {number}",
+        "IN_PROGRESS": "rh record checkpoint   (at a meaningful boundary)",
+        "DEVIATION_GATE": "rh record decision --status accepted|rejected|deferred",
+        "BLOCKED": None,  # a blocker is cleared by a person, not by a command
+        "VALIDATING": "rh record result",
+        "EVIDENCE_GATE": f"rh record gate --gate evidence --outcome passed|blocked --issue {number}",
+        "KNOWLEDGE_GATE": f"rh record gate --gate knowledge --outcome passed|repaired|blocked --issue {number}",
+        "READY_TO_MERGE": None,  # the researcher merges; RDH never does
+        "DONE": None,
+        "DEFERRED": None,
+        "ABANDONED": None,
+    }
+    return table.get(state)
+
+
+def next_command_note(state: str) -> str | None:
+    """Why there is no command, when there is none."""
+    return {
+        "BLOCKED": "clear the blocker first; no command advances this",
+        "READY_TO_MERGE": "the researcher merges — RDH never runs `gh pr merge`",
+        "DONE": "this work unit is complete",
+        "DEFERRED": "deferred by the researcher",
+        "ABANDONED": "abandoned by the researcher",
+    }.get(state)
+
+
 def ready_blockers(
     *,
     config: Config,
@@ -290,9 +327,19 @@ def ready_blockers(
     records: list[Record],
     pr: int | None,
     dirty: bool,
-) -> list[str]:
-    """Deterministic preconditions for ``READY_TO_MERGE`` (``rh ready``)."""
+    pr_body: str | None = None,
+    pr_body_available: bool = True,
+) -> tuple[list[str], list[str]]:
+    """Deterministic preconditions for ``READY_TO_MERGE`` (``rh ready``).
+
+    Returns ``(blockers, warnings)``. The structural checks below apply only
+    to work the researcher declared ``evidence_required``: they exist to stop
+    an experiment reaching READY_TO_MERGE without ever stating what it does
+    *not* establish, or where its numbers came from (SPEC 15/23/30). They ask
+    whether a section was filled in — never what it says.
+    """
     problems: list[str] = []
+    warnings: list[str] = []
     if pr is None:
         problems.append("no Draft PR is linked to this branch")
     for gate in pending_gates(records, config, marker):
@@ -308,4 +355,27 @@ def ready_blockers(
             problems.append(f"latest checkpoint reports a blocker: {reason}")
     if dirty:
         problems.append("worktree has uncommitted changes")
-    return problems
+
+    evidence_required = bool(marker and marker.evidence_required)
+    if evidence_required and config.require_does_not_establish:
+        if not pr_body_available:
+            warnings.append(
+                'could not read the PR body, so the "Does NOT Establish" section was not checked'
+            )
+        else:
+            section = extract_section(pr_body or "", "Does NOT Establish")
+            if is_placeholder(section):
+                problems.append(
+                    'PR body has no filled-in "Does NOT Establish" section'
+                    if section is None
+                    else 'PR body\'s "Does NOT Establish" section is still empty'
+                )
+    if evidence_required and config.require_provenance:
+        for record in [r for r in records if r.kind == "result"]:
+            provenance = extract_section(record.body, "Provenance")
+            if not filled_fields(provenance):
+                problems.append(
+                    f"Result Record {record.id[:8]} has no filled-in Provenance "
+                    "(commit / configuration / dataset / seed / run ID / artifact)"
+                )
+    return problems, warnings

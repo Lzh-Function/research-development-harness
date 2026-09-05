@@ -11,6 +11,23 @@ Read `rh context --json`. Read the surrounding code and any linked Research
 Question Issue. Ask the researcher for what is genuinely missing — not a
 questionnaire.
 
+Check which long-lived question this serves:
+
+```bash
+"$RH" rq list
+"$RH" rq show <n>     # what is already established under that question
+```
+
+`rq show` is how you avoid proposing work that has already been done. If the
+question does not exist yet and the work is part of a continuing line of
+enquiry, create it before the Work Issue:
+
+```bash
+"$RH" rq create --title "When and where does chirality information emerge?"
+```
+
+Then link the work to it with `--rq <n>` in step 5.
+
 ## 2. Draft the scope
 
 Produce a short draft covering:

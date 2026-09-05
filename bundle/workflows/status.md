@@ -11,6 +11,11 @@ Reports: current work, derived state, risk, Issue, PR, branch, HEAD, latest
 checkpoint, changes since that checkpoint, pending gates, blockers, and the
 next recorded action.
 
+`rh status` also reports **Next Command**: the command that mechanically
+advances the current state. Gate outcomes are always offered as the full set
+of choices (`passed|overridden`) — the researcher decides which, never you and
+never the CLI.
+
 ## Reading it
 
 * `changes_since_checkpoint` non-empty and large → the checkpoint is stale;

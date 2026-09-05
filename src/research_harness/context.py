@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -25,8 +26,8 @@ from .git import GitRepo, parse_github_remote
 from .github import GitHubClient, GitHubIssue, GitHubPR
 from .outbox import Outbox
 from .proc import CommandRunner, SubprocessRunner
-from .records import Record, WorkMarker, extract_section, headline, strip_markers
-from .state import LinkStore, WorkLink, issue_from_branch
+from .records import RQMarker, Record, WorkMarker, extract_section, headline, strip_markers
+from .state import LinkStore, WorkLink, derive_state, issue_from_branch
 from .util import atomic_write, iso_timestamp
 
 
@@ -69,6 +70,10 @@ class TimelineEntry:
             "record_id": self.record_id,
             "url": self.url,
         }
+
+
+#: The linkage line RDH writes at the top of every PR body it opens.
+_ISSUE_REF_RE = re.compile(r"\b(Closes|Fixes|Resolves|Refs)\s+#(\d+)", re.IGNORECASE)
 
 
 def _work_headline(body: str, *, limit: int = 96) -> str:
@@ -162,6 +167,7 @@ class Session:
         self._github: GitHubClient | None = None
         self._resolved_slug: str | None = None
         self._records_cache: dict[int, list[Record]] = {}
+        self._prs_by_issue: dict[int, dict[str, Any]] | None = None
         self.installation: Installation | None = Installation.locate_optional(self.git.root)
         self.config: Config = self.installation.config if self.installation else Config()
         self.state_dir: Path = self.git.state_dir()
@@ -359,6 +365,121 @@ class Session:
                     )
         return sorted(found.values(), key=lambda pair: pair[0].number, reverse=True)
 
+    def prs_by_issue(self, *, limit: int = 100) -> dict[int, dict[str, Any]]:
+        """Map Work Issue number to its pull request.
+
+        Derived from the ``Closes #n`` / ``Refs #n`` line RDH writes into every
+        PR body it opens, so it travels with the repository instead of relying
+        on the local link store (which a fresh clone does not have). One API
+        call serves a whole cross-issue survey.
+        """
+        if self._prs_by_issue is not None:
+            return self._prs_by_issue
+        mapping: dict[int, dict[str, Any]] = {}
+        for link in self.links.all():
+            if link.pr:
+                mapping[link.issue] = {"number": link.pr, "state": None, "head": link.branch}
+        if not self.offline:
+            try:
+                data = self.github.json(
+                    ["pr", "list", "--state", "all", "--limit", str(limit),
+                     "--json", "number,state,body,headRefName,mergedAt"]
+                )
+            except HarnessError:
+                data = None
+            for item in data or []:
+                if not isinstance(item, dict):
+                    continue
+                match = _ISSUE_REF_RE.search(str(item.get("body") or ""))
+                if not match:
+                    continue
+                pr = GitHubPR.from_json(item)
+                mapping[int(match.group(2))] = {"number": pr.number, "state": pr.state, "head": pr.head}
+        self._prs_by_issue = mapping
+        return mapping
+
+    def research_questions(self, *, state: str = "all", limit: int = 100) -> list[GitHubIssue]:
+        """Issues carrying an ``rh:rq`` marker, newest first."""
+        found: list[GitHubIssue] = []
+        if not self.offline:
+            try:
+                for issue in self.github.issue_list(state=state, limit=limit, with_body=True):
+                    if RQMarker.parse(issue.body) is not None:
+                        found.append(issue)
+            except HarnessError:
+                pass
+        if not found:
+            for number in self.cached_issue_numbers():
+                issue = self._cached_issue(number)
+                if issue is not None and RQMarker.parse(issue.body) is not None:
+                    found.append(issue)
+        return sorted(found, key=lambda issue: issue.number, reverse=True)
+
+    def rq_summary(self, number: int, *, state: str = "all", limit: int = 100) -> dict[str, Any]:
+        """Everything recorded under one Research Question.
+
+        Deliberately an aggregation, not a synthesis: the ``Supports`` and
+        ``Does NOT Support`` lines are reproduced as written. Deciding what the
+        question's answer now is belongs to the researcher, with the agent's
+        help — never to this function.
+        """
+        rq_issue = self.issue(number)
+        units: list[dict[str, Any]] = []
+        for issue_obj, marker in self.work_issues(state=state, limit=limit):
+            if marker.rq != number:
+                continue
+            records, from_github = self.records(issue_obj.number, refresh=not self.offline)
+            if from_github:
+                self.cache_records(issue_obj.number, records, issue_obj=issue_obj)
+            pr_info = self.prs_by_issue().get(issue_obj.number)
+            derived = derive_state(
+                config=self.config,
+                issue=issue_obj.number,
+                issue_state=issue_obj.state,
+                marker=marker,
+                records=records,
+                branch_linked=pr_info is not None,
+                pr=pr_info["number"] if pr_info else None,
+                pr_state=pr_info.get("state") if pr_info else None,
+            )
+            results = [r for r in records if r.kind == "result"]
+            units.append(
+                {
+                    "issue": issue_obj.number,
+                    "title": issue_obj.title,
+                    "issue_state": issue_obj.state,
+                    "pr": pr_info["number"] if pr_info else None,
+                    "state": derived.state,
+                    "risk": marker.risk,
+                    "kind": marker.kind,
+                    "pending_gates": derived.pending_gates,
+                    "results": [
+                        {
+                            "id": record.id,
+                            "at": record.created_at,
+                            "supports": extract_section(record.body, "Supports"),
+                            "does_not_support": extract_section(record.body, "Does NOT Support"),
+                            "observation": extract_section(record.body, "Observation"),
+                        }
+                        for record in results
+                    ],
+                }
+            )
+        units.sort(key=lambda unit: unit["issue"])
+        by_state: dict[str, int] = {}
+        for unit in units:
+            by_state[unit["state"]] = by_state.get(unit["state"], 0) + 1
+        return {
+            "rq": number,
+            "title": rq_issue.title if rq_issue else "",
+            "url": rq_issue.url if rq_issue else None,
+            "issue_state": rq_issue.state if rq_issue else None,
+            "is_research_question": bool(rq_issue and RQMarker.parse(rq_issue.body) is not None),
+            "work_units": units,
+            "counts": by_state,
+            "result_count": sum(len(unit["results"]) for unit in units),
+        }
+
     def cached_issue_numbers(self) -> list[int]:
         directory = self.state_dir / "cache"
         if not directory.exists():
@@ -377,6 +498,7 @@ class Session:
         state: str = "all",
         limit_issues: int = 100,
         include_work: bool = True,
+        rq: int | None = None,
     ) -> list["TimelineEntry"]:
         """Every durable record across Work Issues, newest first."""
         entries: list[TimelineEntry] = []
@@ -388,6 +510,8 @@ class Session:
                 issue_obj = self.issue(number)
                 if issue_obj is not None:
                     pairs.append((issue_obj, WorkMarker.parse(issue_obj.body) or WorkMarker()))
+        if rq is not None:
+            pairs = [pair for pair in pairs if pair[1].rq == rq]
         for issue_obj, marker in pairs:
             records, from_github = self.records(issue_obj.number, refresh=not self.offline)
             if from_github:
