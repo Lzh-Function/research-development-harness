@@ -180,6 +180,38 @@ class IdempotencyTests(unittest.TestCase):
         self.assertEqual(records[0].comment_id, "2")
 
 
+class RepoFlagTests(unittest.TestCase):
+    """`gh repo ...` rejects --repo; adding it broke default_branch silently."""
+
+    def test_repo_subcommand_never_gets_the_repo_flag(self):
+        runner = FakeRunner(default=ok('{"defaultBranchRef":{"name":"main"}}'))
+        instance = client(runner)
+        self.assertEqual(instance.default_branch(), "main")
+        argv = runner.calls[0][0]
+        self.assertNotIn("--repo", argv)
+        self.assertIn("octo/research", argv, "the repository must be passed positionally")
+
+    def test_issue_and_pr_subcommands_still_get_the_flag(self):
+        for args in (["issue", "view", "1"], ["pr", "view", "1"], ["issue", "list"]):
+            with self.subTest(args=args):
+                runner = FakeRunner(default=ok("{}"))
+                client(runner).run(args)
+                self.assertIn("--repo", runner.calls[0][0])
+
+    def test_api_and_auth_never_get_the_flag(self):
+        for args in (["api", "repos/x/y/issues"], ["auth", "status"], ["--version"]):
+            with self.subTest(args=args):
+                runner = FakeRunner(default=ok("{}"))
+                client(runner).run(args)
+                self.assertNotIn("--repo", runner.calls[0][0])
+
+    def test_default_branch_without_a_known_repo(self):
+        runner = FakeRunner(default=ok('{"defaultBranchRef":{"name":"trunk"}}'))
+        instance = GitHubClient(runner=runner, sleep=lambda _s: None)
+        self.assertEqual(instance.default_branch(), "trunk")
+        self.assertEqual(list(runner.calls[0][0]), ["gh", "repo", "view", "--json", "defaultBranchRef"])
+
+
 class RepoResolutionTests(unittest.TestCase):
     def test_resolve_repo_from_gh(self):
         runner = FakeRunner(default=ok('{"nameWithOwner":"octo/research"}'))

@@ -827,7 +827,7 @@ branch を分けてください（作業 A → branch A、作業 B → branch B�
 ./run-tests -q
 ```
 
-318 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
+329 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
 
 - authoritative な設計文書: [docs/SPEC.md](docs/SPEC.md)
 - 実装上の判断と意図的な差分: [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)

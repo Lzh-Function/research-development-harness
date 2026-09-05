@@ -701,6 +701,49 @@ def cmd_rq_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_issue_close(args: argparse.Namespace) -> int:
+    """Close a Work Issue (SPEC 24).
+
+    Implementation work closes on merge via ``Closes #n``; an experiment or
+    analysis does not — a merged PR is not a scientific conclusion. So closing
+    evidence-required work requires a Result Record and a passed evidence gate
+    first. Closing is reversible; RDH never deletes an issue.
+    """
+    session = make_session(args)
+    issue_obj = session.issue(args.issue)
+    if issue_obj is None:
+        raise PreconditionError(f"could not read issue #{args.issue}")
+    if issue_obj.state.upper() == "CLOSED":
+        emit_json({"issue": args.issue, "state": "CLOSED", "changed": False}) if args.json else emit(
+            f"issue #{args.issue} is already closed"
+        )
+        return 0
+    marker = WorkMarker.parse(issue_obj.body)
+    records, _ = session.records(args.issue, refresh=not session.offline)
+    problems: list[str] = []
+    if marker and marker.evidence_required and not args.force:
+        if not any(r.kind == "result" for r in records):
+            problems.append("no Result Record: a merged PR is not a scientific conclusion")
+        if not gate_satisfied(records, "evidence"):
+            problems.append("the evidence gate has not passed")
+    if problems:
+        raise PreconditionError(
+            f"refusing to close #{args.issue}: " + "; ".join(problems),
+            hint="Record the result and take the Evidence Gate, or pass --force if you mean it.",
+        )
+    if args.dry_run:
+        emit_json({"dry_run": True, "issue": args.issue}) if args.json else emit(
+            f"[dry-run] would close issue #{args.issue}"
+        )
+        return 0
+    session.github.issue_close(args.issue, comment=args.comment)
+    if args.json:
+        emit_json({"issue": args.issue, "state": "CLOSED", "changed": True})
+    else:
+        emit(f"closed issue #{args.issue}")
+    return 0
+
+
 def cmd_work_start(args: argparse.Namespace) -> int:
     session = make_session(args)
     issue_number = args.issue
@@ -1161,6 +1204,14 @@ def build_parser() -> argparse.ArgumentParser:
     rq_show.add_argument("--state", default="all", choices=("open", "closed", "all"))
     rq_show.add_argument("--json", action="store_true")
     rq_show.set_defaults(func=cmd_rq_show)
+
+    issue_close = issue_sub.add_parser("close", help="close a Work Issue (never deletes)")
+    issue_close.add_argument("issue", type=int)
+    issue_close.add_argument("--comment", help="closing comment")
+    issue_close.add_argument("--force", action="store_true", help="close without the evidence preconditions")
+    issue_close.add_argument("--json", action="store_true")
+    issue_close.add_argument("--dry-run", action="store_true")
+    issue_close.set_defaults(func=cmd_issue_close)
 
     work_parser = subparsers.add_parser("work", help="work unit lifecycle")
     work_sub = work_parser.add_subparsers(dest="work_command", required=True)

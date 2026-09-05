@@ -22,7 +22,7 @@ Every requirement in SPEC 64 (Mandatory Acceptance Scenarios) and SPEC 70
 | 9 | `READY_TO_MERGE` reachable | `integration.RecordAndStateTests.test_state_advances_through_the_flow` |
 | 10 | The harness never merges | `integration.NoDestructiveOperationsTests`, `e2e.ScenarioH.test_harness_never_merges_even_when_ready`, and `gh pr merge` exits 99 in the fake `gh` |
 | 11 | Outbox + idempotent sync on GitHub failure | `integration.OfflineTests` (9 tests), `unit.test_outbox` |
-| 12 | Main behaviours covered by automated tests | 318 tests, standard library only |
+| 12 | Main behaviours covered by automated tests | 329 tests, standard library only |
 
 ## Mandatory Acceptance Scenarios (SPEC 64)
 
@@ -79,9 +79,20 @@ exactly-once `rh sync`, and a clean `rh doctor`. Verified independently
 through `gh`: six durable records with correct markers, the PR still Draft,
 and remote `main` untouched.
 
-It found one defect the fake `gh` could not: GitHub refuses to open a pull
-request on a branch with no commits, which is the state `rh work start` leaves
-a new branch in.
+It found two defects the fake `gh` could not:
+
+* GitHub refuses to open a pull request on a branch with no commits, which is
+  the state `rh work start` leaves a new branch in.
+* `gh repo view` rejects `--repo` ("unknown flag"); the repository is a
+  positional argument. Every repo-scoped call appended the flag, so
+  `default_branch()` always failed and returned `None`, silently falling back
+  to local branch detection.
+
+Every `gh` wrapper reachable from the CLI has now been exercised against the
+real API: `--version`, `auth status`, `repo view` (with and without a known
+repository), `issue create|view|list|comment|close`, paginated
+`api .../comments`, `pr create|view|list|edit`, plus offline queueing and
+`rh sync`.
 
 ## Not covered in v0.1
 

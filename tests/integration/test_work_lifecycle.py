@@ -573,3 +573,51 @@ class StructuralReadyTests(LifecycleTestCase):
         payload = self.rh_json(["--offline", "ready"])
         self.assertTrue(payload["ready"])
         self.assertTrue(any("not checked" in w for w in payload["warnings"]))
+
+
+class IssueCloseTests(LifecycleTestCase):
+    """SPEC 24: an experiment does not close just because a PR merged."""
+
+    def test_evidence_required_work_will_not_close_without_evidence(self):
+        issue = self.create_issue()
+        result = self.rh(["issue", "close", str(issue)])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not a scientific conclusion", result.stderr)
+        self.assertIn("evidence gate", result.stderr)
+        self.assertEqual(self.sandbox.gh_data()["issues"][str(issue)]["state"], "OPEN")
+
+    def test_closes_once_the_result_and_evidence_gate_exist(self):
+        issue = self.create_issue()
+        self.rh_json(["record", "result", "--issue", str(issue), "--body", "### Observation\nx"])
+        self.pass_gate(issue, "evidence")
+        self.rh_json(["issue", "close", str(issue), "--comment", "evidence recorded"])
+        self.assertEqual(self.sandbox.gh_data()["issues"][str(issue)]["state"], "CLOSED")
+
+    def test_implementation_work_closes_freely(self):
+        issue = self.create_issue(title="Add loader", kind="implementation", risk="low", evidence=False)
+        self.rh_json(["issue", "close", str(issue)])
+        self.assertEqual(self.sandbox.gh_data()["issues"][str(issue)]["state"], "CLOSED")
+
+    def test_force_overrides_the_precondition(self):
+        issue = self.create_issue()
+        self.rh_json(["issue", "close", str(issue), "--force"])
+        self.assertEqual(self.sandbox.gh_data()["issues"][str(issue)]["state"], "CLOSED")
+
+    def test_dry_run_closes_nothing(self):
+        issue = self.create_issue(risk="low", evidence=False)
+        self.rh(["issue", "close", str(issue), "--dry-run"], check=True)
+        self.assertEqual(self.sandbox.gh_data()["issues"][str(issue)]["state"], "OPEN")
+
+    def test_closing_twice_is_harmless(self):
+        issue = self.create_issue(risk="low", evidence=False)
+        self.rh_json(["issue", "close", str(issue)])
+        payload = self.rh_json(["issue", "close", str(issue)])
+        self.assertFalse(payload["changed"])
+
+    def test_no_command_can_delete_an_issue(self):
+        """Closing is reversible; deletion is never offered."""
+        help_text = self.rh(["issue", "--help"], check=True).stdout
+        subcommands = help_text.split("{", 1)[1].split("}", 1)[0].split(",")
+        self.assertEqual(sorted(subcommands), ["close", "create"])
+        result = self.rh(["issue", "delete", "1"])
+        self.assertNotEqual(result.returncode, 0)

@@ -179,9 +179,14 @@ class GitHubClient:
 
     # ----------------------------------------------------------------- plumbing
 
+    #: `gh repo ...` takes the repository as a positional argument and rejects
+    #: `--repo` outright ("unknown flag"). Adding it silently broke every
+    #: `repo view` call, which then failed soft and returned None.
+    _NO_REPO_FLAG: frozenset[str] = frozenset({"repo", "api", "auth", "version"})
+
     def _argv(self, args: Sequence[str], *, repo_scoped: bool = True) -> list[str]:
         argv = [self.gh_path, *args]
-        if repo_scoped and self.repo:
+        if repo_scoped and self.repo and args and args[0].lstrip("-") not in self._NO_REPO_FLAG:
             argv.extend(["--repo", self.repo])
         return argv
 
@@ -316,6 +321,11 @@ class GitHubClient:
             return [data]
         return [item for item in (data or []) if isinstance(item, dict)]
 
+    # Deliberately absent: `issue edit --body` and `pr comment`.
+    # Rewriting a Work Issue body would erase historical intent (SPEC 29), and
+    # PR comments are not a record store (SPEC 25). Providing the wrappers
+    # would only make those mistakes easy to reach.
+
     def issue_close(self, number: int, *, comment: str | None = None) -> None:
         """Close a Work Issue. Closing is reversible; deletion is never done."""
         args = ["issue", "close", str(number)]
@@ -324,10 +334,6 @@ class GitHubClient:
             # a single argv element, never through a shell.
             args.extend(["--comment", comment])
         self.check(args)
-
-    def issue_edit_body(self, number: int, body: str) -> None:
-        with body_file(body, dir=self.tmp_dir) as path:
-            self.check(["issue", "edit", str(number), "--body-file", str(path)])
 
     # ---------------------------------------------------------------- records
 
@@ -411,13 +417,12 @@ class GitHubClient:
         with body_file(body, dir=self.tmp_dir) as path:
             self.check(["pr", "edit", str(number), "--body-file", str(path)])
 
-    def pr_comment(self, number: int, body: str) -> str:
-        with body_file(body, dir=self.tmp_dir) as path:
-            result = self.check(["pr", "comment", str(number), "--body-file", str(path)])
-        return result.out.strip()
-
     def default_branch(self) -> str | None:
-        result = self.run(["repo", "view", "--json", "defaultBranchRef"], repo_scoped=bool(self.repo), retry=False)
+        args = ["repo", "view"]
+        if self.repo:
+            args.append(self.repo)  # positional, never --repo
+        args.extend(["--json", "defaultBranchRef"])
+        result = self.run(args, repo_scoped=False, retry=False)
         if not result.ok:
             return None
         try:
