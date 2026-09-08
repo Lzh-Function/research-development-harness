@@ -93,6 +93,25 @@ git add .research-harness .claude .agents AGENTS.md CLAUDE.md
 git commit -m "Research Development Harness を導入"
 ```
 
+### やめたくなったら
+
+導入を決める前に、**戻し方**を知っておいてください。RDH は allow-list された領域にしか書かないので、**git 自身がアンインストーラです**。専用の削除コマンドはありません（必要ないからです）。
+
+```bash
+# 導入を commit 済みの場合
+git revert <導入 commit>
+
+# まだ commit していない場合
+git checkout -- AGENTS.md CLAUDE.md
+rm -rf .research-harness .claude/skills/rh-* .agents/skills/rh-*
+```
+
+どちらでも、**既存の AGENTS.md の内容、未 commit の作業、untracked ファイル、branch、履歴はそのまま残ります**。実測で確認済みです（`git revert` 後の導入前 commit との差分は、研究者自身の未 commit 編集のみ）。
+
+`.git/research-harness/`（link・cache・outbox）だけは commit されない領域なので revert では消えません。気になるなら `rm -rf .git/research-harness` してください。研究データは入っていません。
+
+GitHub 側に作った Issue と PR は残ります。RDH は Issue を削除しません。不要なら自分で close してください。
+
 ### 動作確認
 
 ```bash
