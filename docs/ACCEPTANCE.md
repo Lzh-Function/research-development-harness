@@ -22,7 +22,7 @@ Every requirement in SPEC 64 (Mandatory Acceptance Scenarios) and SPEC 70
 | 9 | `READY_TO_MERGE` reachable | `integration.RecordAndStateTests.test_state_advances_through_the_flow` |
 | 10 | The harness never merges | `integration.NoDestructiveOperationsTests`, `e2e.ScenarioH.test_harness_never_merges_even_when_ready`, and `gh pr merge` exits 99 in the fake `gh` |
 | 11 | Outbox + idempotent sync on GitHub failure | `integration.OfflineTests` (9 tests), `unit.test_outbox` |
-| 12 | Main behaviours covered by automated tests | 329 tests, standard library only |
+| 12 | Main behaviours covered by automated tests | 332 tests, standard library only |
 
 ## Mandatory Acceptance Scenarios (SPEC 64)
 

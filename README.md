@@ -707,6 +707,15 @@ answer now is, is for the researcher to decide — not for RDH.
 | `rh pr create` | 最初の commit を積んだ後に Draft PR を開くとき（下記参照） |
 | `rh pr update` | 仕上げに PR 本文を合成するとき |
 | `rh ready` | merge 可能か確認するとき |
+| `rh issue close <n>` | 実験・解析の Work Issue を閉じるとき（下記参照） |
+
+**Issue の閉じ方は kind で変わります。** implementation なら PR 本文の `Closes #n` により merge で自動的に閉じます。**experiment / analysis は merge では閉じません。**コードが入ったことと問いに答えが出たことは別だからです。Result Record と Evidence Gate が揃ってから閉じます。
+
+```bash
+rh issue close 12 --comment "layer 5 までの結果で当初の問いは決着。MLP probe は #18 へ。"
+```
+
+evidence_required な作業で Result Record か evidence gate が欠けている場合は拒否されます（`--force` で越えられます）。**close は可逆で、RDH は Issue を削除しません。**
 
 **`rh work start` の直後に Draft PR が開かないことがあります。** GitHub は commit が 1 つも無い branch に PR を作れないためで、`rh work start` はそれを検知して「commit してから `rh pr create`」と案内します。branch も Work Issue との紐付けも既にできているので、失われるものはありません。
 
@@ -827,7 +836,7 @@ branch を分けてください（作業 A → branch A、作業 B → branch B�
 ./run-tests -q
 ```
 
-329 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
+332 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
 
 - authoritative な設計文書: [docs/SPEC.md](docs/SPEC.md)
 - 実装上の判断と意図的な差分: [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)

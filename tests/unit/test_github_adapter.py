@@ -35,6 +35,15 @@ class ClassificationTests(unittest.TestCase):
     def test_missing_executable(self):
         self.assertEqual(classify_failure(fail("not found", code=127)), "missing")
 
+    def test_no_repository(self):
+        for text in (
+            "no git remotes found",
+            "none of the git remotes configured for this repository were found on GitHub",
+            "could not determine the current repository",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(classify_failure(fail(text)), "norepo")
+
     def test_other(self):
         self.assertEqual(classify_failure(fail("GraphQL: unexpected")), "other")
 
@@ -80,6 +89,25 @@ class ErrorTranslationTests(unittest.TestCase):
         runner = FakeRunner(default=fail("GraphQL: unexpected"))
         with self.assertRaises(GitHubError):
             client(runner).issue_view(1)
+
+    def test_missing_repository_is_actionable(self):
+        """The first error a new user hits must name the fix, not dump argv."""
+        runner = FakeRunner(default=fail("no git remotes found"))
+        with self.assertRaises(GitHubError) as caught:
+            client(runner).issue_create("T", "body")
+        rendered = caught.exception.render()
+        self.assertIn("no GitHub repository is configured", rendered)
+        self.assertIn("git remote add origin", rendered)
+        self.assertIn("github.repo", rendered)
+
+    def test_errors_do_not_leak_the_body_file_path(self):
+        runner = FakeRunner(default=fail("GraphQL: something odd"))
+        with self.assertRaises(GitHubError) as caught:
+            client(runner).issue_create("T", "a long body that lives in a temp file")
+        message = caught.exception.message
+        self.assertNotIn("--body-file", message)
+        self.assertNotIn("rh-body-", message)
+        self.assertIn("gh issue create", message)
 
 
 class RetryTests(unittest.TestCase):

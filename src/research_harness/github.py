@@ -36,6 +36,12 @@ _AUTH_HINTS = (
     "http 403",
     "requires authentication",
 )
+_NO_REPO_HINTS = (
+    "no git remotes found",
+    "none of the git remotes configured for this repository",
+    "could not determine the current repository",
+    "not a git repository",
+)
 _UNAVAILABLE_HINTS = (
     "could not resolve host",
     "connection refused",
@@ -62,6 +68,8 @@ def classify_failure(result: CommandResult) -> str:
     if result.returncode in (126, 127):
         return "missing"
     text = (result.stderr + "\n" + result.stdout).lower()
+    if any(hint in text for hint in _NO_REPO_HINTS):
+        return "norepo"
     if any(hint in text for hint in _AUTH_HINTS):
         return "auth"
     if any(hint in text for hint in _UNAVAILABLE_HINTS):
@@ -212,6 +220,12 @@ class GitHubClient:
                 "GitHub CLI (gh) is not installed or not on PATH",
                 hint="Install gh from https://cli.github.com/ — RDH never installs it for you.",
             )
+        if kind == "norepo":
+            raise GitHubError(
+                "no GitHub repository is configured for this checkout",
+                hint="Add a remote (git remote add origin git@github.com:owner/name.git), "
+                "or set github.repo in .research-harness/config.toml.",
+            )
         if kind == "auth":
             raise GitHubAuthError(f"GitHub authentication failed: {message}", hint="Run: gh auth login")
         if kind == "unavailable":
@@ -219,7 +233,9 @@ class GitHubClient:
                 f"GitHub is unreachable: {message}",
                 hint="Records are queued in the outbox; run `rh sync` when back online.",
             )
-        raise GitHubError(f"gh {' '.join(args)} failed: {message}")
+        # Name the operation, not the whole argument vector: a --body-file path
+        # in the error tells the researcher nothing and hides the real cause.
+        raise GitHubError(f"gh {' '.join(args[:2])} failed: {message}")
 
     def json(self, args: Sequence[str], *, repo_scoped: bool = True) -> Any:
         result = self.check(args, repo_scoped=repo_scoped)

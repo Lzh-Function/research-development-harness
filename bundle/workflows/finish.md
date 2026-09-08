@@ -61,5 +61,15 @@ branch.
 ## 5. Issue closing semantics
 
 * Implementation work whose purpose is complete on merge → `Closes #<n>`.
-* Experiment or analysis → `Refs #<n>`; the Issue closes after the Result
-  Record and Evidence Gate, not on merge.
+  GitHub closes the Issue itself when the PR merges; nothing more to do.
+* Experiment or analysis → `Refs #<n>`; the Issue does **not** close on merge.
+  A merged PR is not a scientific conclusion. Close it once the Result Record
+  and Evidence Gate exist:
+
+```bash
+"$RH" issue close <n> --comment "<why the question is now settled>"
+```
+
+`rh issue close` refuses to close evidence-required work that has no Result
+Record or no passing evidence gate. Closing is reversible, and RDH never
+deletes an Issue.
