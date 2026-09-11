@@ -85,6 +85,8 @@ cd research-development-harness
 AGENTS.md / CLAUDE.md       ← marker の内側だけ
 ```
 
+**すでに動いている研究に途中から入れる場合**は、やり方が変わります。過去を整理しないこと、進行中の branch だけを取り込むことが要点で、[6. 既存プロジェクトに入れる日](#6-既存プロジェクトに入れる日--18-か月分の-scrna-seq-解析) に一部始終があります。
+
 導入後、生成物を commit してください。これで、その repository を clone した誰もが（この distribution repository なしで）そのまま使えます。
 
 ```bash
@@ -163,7 +165,7 @@ Skill 名の後ろに書いた文は、そのまま Agent に渡ります（Clau
 
 ## 5. ある一日 — キラリティ情報の消失層を特定する
 
-深層学習 × ケモインフォマティクスの実際の流れを、**研究者が実際に打つプロンプト**とともに追います。
+深層学習 × ケモインフォマティクスの実際の流れを、**研究者が実際に打つプロンプト**とともに追います。**RDH が既に入っている repository で、新しい作業を 1 件やりきる**までの話です（すでに動いている研究に途中から入れる話は [次節](#6-既存プロジェクトに入れる日--18-か月分の-scrna-seq-解析)）。
 
 **設定**: GNN で分子物性を予測している。「キラリティ情報が message passing のどの層で失われるのか」を調べたい。
 
@@ -676,7 +678,272 @@ read-only で、`--offline` でも local cache から動きます。
 
 ---
 
-## 6. コマンド一覧と使いどころ
+## 6. 既存プロジェクトに入れる日 — 18 か月分の scRNA-seq 解析
+
+前節は「今日から新しい作業を始める」話でした。こちらは **すでに動いている研究に、途中から入れる** 話です。性質がまったく違うので、別に追います。
+
+**設定**: single-cell RNA-seq の batch effect 補正を 18 か月やってきた。branch が 4 本あり、どれが生きているのか自分でも曖昧。`results/` には過去の sweep が積み上がっていて、何がどの結論の根拠だったか思い出せない。既存の `AGENTS.md` と `.codex/` もある。
+
+**この節で一番大事なこと**: RDH の移行は **Overlay + Cutover** です。**過去を整理しません。** 過去 commit を Issue 化せず、branch を rename せず、過去の実験を Result Record に変換しません。目的は過去を完璧にすることではなく、**今日から迷子にならないこと**です。
+
+---
+
+### 10:00 — 壊さないことを先に確かめる
+
+```
+👤 この repo に RDH 入れたいけど、いま harmony-tuning で書きかけがある。壊れない？
+```
+
+🤖 まず何が起きるかだけ見せます。
+
+```
+$ ./bin/rh adopt ~/work/scrna-batch --dry-run
+
+Would adopt RDH into /home/you/work/scrna-batch
+  runtime 0.1.0, bundle 0.1.0
+  57 created, 1 updated, 0 unchanged, 0 preserved
+    create   .research-harness/policy/human-gates.md
+    create   .research-harness/policy/records.md
+    create   .research-harness/policy/safety.md
+    …
+```
+
+`1 updated` は既存の `AGENTS.md` です。**marker で囲った内側だけ**が追記されます。研究ファイルは 1 つも触りません。
+
+```
+👤 じゃあ入れて
+```
+
+```
+$ ./bin/rh adopt ~/work/scrna-batch
+
+Adopted RDH into /home/you/work/scrna-batch
+  runtime 0.1.0, bundle 0.1.0
+  57 created, 1 updated, 0 unchanged, 0 preserved
+```
+
+### 10:05 — 何も壊れていないことを確認する
+
+```
+$ git status --short
+
+ M AGENTS.md
+ M experiments/sweep_harmony.py     ← 書きかけ、そのまま
+?? .agents/
+?? .claude/
+?? .research-harness/
+?? CLAUDE.md
+?? scratch_notes.txt                ← untracked、そのまま
+```
+
+`AGENTS.md` の既存内容（「results/ は絶対に消さない」）は marker の外にそのまま残っています。branch も履歴も HEAD も無変更です。
+
+### 10:10 — Agent に現状を渡す
+
+```
+👤 /rh-status この repo の現状を把握して
+```
+
+🤖 Agent は `rh audit` で**分類されていない inventory** を受け取ります。
+
+```
+$ rh audit
+
+repository   /home/you/work/scrna-batch
+github       mylab/scrna-batch
+branch       harmony-tuning  head 1390b09afe4913b6edbc7792a0c5045777263fa7
+dirty        True (7 path(s))
+branches     donor-regression, harmony-tuning, main, scvi-v3-tuning
+worktrees    1
+adopted      True
+file         AGENTS.md (managed block: True)
+file         CLAUDE.md (managed block: True)
+file         README.md
+dir          .claude/ (1 entries)
+dir          .agents/ (1 entries)
+dir          .codex/ (1 entries)
+dir          .research-harness/ (9 entries)
+tests        tests, pytest.ini
+experiments? experiments, notebooks, configs
+results?     results
+
+This inventory is deliberately unclassified; interpreting it is the agent's job.
+```
+
+最終行が効きどころです。**`rh` は「どの branch が生きているか」を判定しません。** 事実だけを並べ、意味づけは Agent と研究者に委ねます。`experiments?` の `?` も同じ理由で付いています。
+
+### 10:30 — Agent の推測を、研究者が訂正する（Migration Gate）
+
+🤖 Agent は audit と中身を読んで推測を提示します。**これは推測であり、確定ではありません。**
+
+> 以下は推測です。間違っているところを直してください。
+>
+> - **active** と思われるもの: `harmony-tuning`（未 commit の編集あり、直近の commit）
+> - **止まっていそう**: `scvi-v3-tuning`（config だけ足して以降なし）
+> - **放棄されていそう**: `donor-regression`（main から分岐後、commit なし）
+> - **重要そうな証拠**: `results/scvi_v3/`、`results/v1/`
+> - **認知的負債**: kBET の解釈が notebook 03 と sweep script で食い違って見える
+
+```
+👤 donor-regression は放棄じゃない。donor 効果を回帰で抜く筋は本命の
+   代替案で、harmony が駄目だったら戻る。scvi-v3-tuning は本当に止まってる。
+   あと results/v1 はもう根拠に使ってない。前処理が今と違う。
+```
+
+🤖 **Agent の推測だけで「放棄」と確定してはいけません。** 研究者しか知らない文脈があります。ここが移行における Human Gate です。
+
+### 11:00 — baseline.md を書く
+
+adopt が雛形を置いています。
+
+```markdown
+# Research Harness Baseline — scrna-batch
+
+Cutover date: 2026-09-11T09:38:38.055Z
+
+This file is a **snapshot taken when RDH was adopted**, not a living document.
+...
+## Current Research Objectives
+## Active Work
+## Deferred Work
+## Abandoned Work
+## Important Historical Decisions
+## Important Existing Evidence
+## Repository Architecture
+## Known Cognitive Debt
+## Immediate Next Work
+```
+
+訂正後の理解をここに書きます。`donor-regression` は **Deferred Work**（放棄ではない、harmony が駄目なら戻る）、`results/v1` は **Abandoned**（前処理が古い）、kBET/ASW の食い違いは **Known Cognitive Debt**。
+
+**これは cutover 時点の snapshot で、以後更新しません。** 生きた状態は Issue と record 側が持ちます。
+
+### 11:20 — 長期の問いを立てる
+
+18 か月やってきた以上、**問いはもう存在しています**。それを明示します。
+
+```
+$ rh rq create --title "Which batch-effect correction preserves biological signal on donor-split data?"
+
+created Research Question #1: https://github.com/mylab/scrna-batch/issues/1
+Link work to it with: rh issue create --rq 1 ...
+```
+
+### 11:30 — 進行中の筋だけを Work Issue にする
+
+```
+👤 /rh-scope harmony-tuning でやってる theta sweep を追跡対象にしたい
+```
+
+🤖 **1 本だけ**です。4 本すべてを Issue 化しません。
+
+```
+$ rh issue create --title "Finish harmony theta sweep and explain the kBET/ASW divergence" \
+    --kind analysis --risk medium --evidence-required --rq 1 --body-file scope.md
+
+created Work Issue #2: https://github.com/mylab/scrna-batch/issues/2
+Next: take the Design Gate if required, then `rh work start 2`.
+```
+
+### 11:40 — 既存作業でも Design Gate は通る
+
+🤖 途中から追跡する作業でも、**何のための作業かの合意は要ります**。むしろ 18 か月経っている分、ここでずれが出ます。
+
+> kBET が良ければ補正は成功、という理解でしたが、kBET は混合度だけを測り
+> 生物学的信号の保存は測りません。ASW と併読する必要があります。
+> この区別を踏まえると、theta を上げたときに何が起きると予想しますか。
+
+```
+👤 なるほど、混ざりはよくなるけど細胞型の分離が潰れるかもしれない、と。
+   だから両方見ないと駄目なのか
+```
+
+```
+$ rh record gate --gate design --outcome passed --body-file gate-a.md
+```
+
+**この修復自体が移行の価値**です。18 か月抱えていた誤解が、追跡を始める時点で 1 つ落ちました。
+
+### 11:45 — 進行中 branch をそのまま取り込む
+
+```
+$ rh work start 2 --existing-branch harmony-tuning
+
+branch    harmony-tuning
+issue     #2
+pushed    True
+draft PR  #1000 https://github.com/mylab/scrna-batch/pull/1000
+note      uncommitted changes were preserved untouched
+```
+
+前節と違い、**Draft PR がその場で開きます**。既存 branch には既に commit があるからです。
+
+```
+$ git branch
+
+donor-regression
+harmony-tuning     ← rename されていない
+main
+scvi-v3-tuning
+
+$ git status --short
+
+ M experiments/sweep_harmony.py     ← 書きかけ、そのまま
+?? scratch_notes.txt
+```
+
+### 11:50 — ここで移行は終わり
+
+```
+$ rh status
+
+Current Work         #2 Finish harmony theta sweep and explain the kBET/ASW divergence
+Derived State        IN_PROGRESS  — implementation is under way
+Risk                 medium (analysis, evidence required)
+Issue                #2
+PR                   #1000
+Branch               harmony-tuning
+Latest Checkpoint    (none)
+Pending Gates        evidence, knowledge
+Blockers             (none)
+Next Command         rh record checkpoint   (at a meaningful boundary)
+```
+
+```
+$ rh rq show 1
+
+#1  [RQ] Which batch-effect correction preserves biological signal on donor-split data?
+      1 work unit(s)  — in_progress 1
+
+#2  Finish harmony theta sweep and explain the kBET/ASW divergence
+      IN_PROGRESS  (analysis/medium)  pending: evidence, knowledge
+      (no Result Record yet)
+```
+
+**残り 3 本の branch は触っていません。** 生き返ったときに `rh work start <n> --existing-branch scvi-v3-tuning` で取り込めばよく、そのときまで放っておきます。
+
+最後に導入を commit します。
+
+```bash
+git add .research-harness .claude .agents AGENTS.md CLAUDE.md
+git commit -m "Research Development Harness を導入"
+```
+
+### 移行でやらないこと
+
+| やらない | 理由 |
+|---|---|
+| 過去 commit を Issue 化する | 過去の完璧な整理は目的ではない |
+| branch を rename する | 研究者の手元と食い違う。RDH は rename しない |
+| 過去の実験を Result Record に変換する | 当時の provenance は失われている。捏造になる |
+| 過去の会話・設計を復元する | できない。baseline に「分からない」と書くほうが正直 |
+| 全 branch をいきなり追跡対象にする | 1 本で 2 週間試してから増やす |
+
+**移行の所要時間は 2 時間程度**です。それ以上かけているなら、たぶん過去を整理しようとしています。
+
+---
+
+## 7. コマンド一覧と使いどころ
 
 ### 日常的に使うもの
 
@@ -838,7 +1105,7 @@ NOT READY_TO_MERGE:
 
 ---
 
-## 7. Human Gate は 4 つだけ
+## 8. Human Gate は 4 つだけ
 
 | Gate | いつ | 何を確認するか |
 |---|---|---|
@@ -861,7 +1128,7 @@ risk と gate の対応（`.research-harness/config.toml` で変更可）:
 
 ---
 
-## 8. RDH が絶対にしないこと
+## 9. RDH が絶対にしないこと
 
 以下は「推奨しない」ではなく、**code で拒否されます**。
 
@@ -878,7 +1145,7 @@ branch / tag / ref の削除            Issue の削除     gh pr merge
 
 ---
 
-## 9. つまずきやすい点
+## 10. つまずきやすい点
 
 **Q. `rh record gate` が「not linked to a Work Issue」と言う**
 Issue を作った直後は branch と紐付いていません。`rh work link <n>` するか、`--issue <n>` を渡してください。
@@ -887,7 +1154,7 @@ Issue を作った直後は branch と紐付いていません。`rh work link <
 title が日本語だと ASCII slug が空になるためです。説明的な branch 名が欲しい場合は、自分で branch を作って `rh work start 12 --existing-branch probe-analysis` としてください。
 
 **Q. 既に走っている研究に途中から入れたい**
-できます。`rh audit` で Agent に repository の inventory を渡し、`.research-harness/baseline.md`（導入時の snapshot）を研究者と一緒に埋め、進行中の branch を `--existing-branch` で取り込みます。**過去 100 commit を Issue 化したり、branch を rename したりはしません。** 目的は過去の完璧な整理ではなく、今日から迷子にならないことです。
+できます。[6. 既存プロジェクトに入れる日](#6-既存プロジェクトに入れる日--18-か月分の-scrna-seq-解析) に、18 か月続いた scRNA-seq 解析へ入れる一部始終があります。要点は、**過去 100 commit を Issue 化したり branch を rename したりしない**こと、進行中の 1 本だけを `--existing-branch` で取り込むこと、そして Agent の推測を研究者が訂正することです。
 
 **Q. 複数の AI を同時に走らせたい**
 branch を分けてください（作業 A → branch A、作業 B → branch B）。同一 branch を 2 つの Agent が同時に書く運用は推奨しません。
@@ -900,7 +1167,7 @@ branch を分けてください（作業 A → branch A、作業 B → branch B�
 
 ---
 
-## 10. 開発・検証
+## 11. 開発・検証
 
 ```bash
 ./run-tests -q
