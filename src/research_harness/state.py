@@ -269,10 +269,23 @@ def derive_state(
 
     if evidence_pending and has_result:
         return DerivedState("EVIDENCE_GATE", "Result Records exist but the evidence gate has not passed", pending, blockers)
-    if evidence_pending or phase == "validating":
-        return DerivedState("VALIDATING", "evidence is still being gathered", pending, blockers)
+
+    # VALIDATING means the agent declared the work to be gathering evidence.
+    # It must not be inferred from "the evidence gate is still pending": that
+    # is true from the moment evidence-required work starts, which would make
+    # IN_PROGRESS unreachable and report an experiment as running before a
+    # single line of it exists.
+    if phase == "validating":
+        return DerivedState("VALIDATING", "evidence is being gathered", pending, blockers)
 
     if phase == "review":
+        if evidence_pending:
+            return DerivedState(
+                "VALIDATING",
+                "declared complete, but this work requires evidence and has no Result Record yet",
+                pending,
+                blockers,
+            )
         if "knowledge" in pending:
             return DerivedState("KNOWLEDGE_GATE", "implementation and evidence are complete; knowledge gate pending", pending, blockers)
         return DerivedState("READY_TO_MERGE", "all required gates passed; the researcher merges, not RDH", pending, blockers)

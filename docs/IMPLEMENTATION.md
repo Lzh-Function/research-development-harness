@@ -34,7 +34,7 @@ contract the spec actually asks for.
 
 ## Decisions the spec left open
 
-**Checkpoint `--phase`.** State derivation must be deterministic (SPEC 10),
+**Checkpoint `--phase` drives the middle of the state ladder.** State derivation must be deterministic (SPEC 10),
 but `VALIDATING` and `READY_TO_MERGE` are not derivable from Git and records
 alone: nothing in a diff says "the implementation is finished" or "the
 experiment is running". Rather than have the CLI guess, checkpoints carry an
@@ -43,6 +43,13 @@ written by the agent, which is a report of an agent-side judgement, not a
 judgement made by the CLI. `READY_TO_MERGE` is reachable only from a declared
 `review` checkpoint — "no gate is outstanding" is not evidence that work is
 done, and low-risk work requires no gates at all.
+
+The same reasoning applies in the other direction, and it took a
+documentation pass to notice: `VALIDATING` was originally returned whenever
+the evidence gate was pending, which is true from the moment evidence-required
+work starts. That made `IN_PROGRESS` unreachable for every experiment and had
+`rh status` announce "evidence is being gathered" before a line of the
+experiment existed. `VALIDATING` now follows the declared phase only.
 
 **Gate thresholds live in `config.toml`.** SPEC 19 gives risk→gate policy in
 prose. It is implemented as threshold arithmetic over the declared risk level

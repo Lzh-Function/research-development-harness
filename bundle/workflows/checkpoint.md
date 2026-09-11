@@ -30,6 +30,16 @@ Never: per commit, per function, or as a diary.
 how you tell `rh status` what the work is doing; state derivation never
 guesses.
 
+This is the only thing that moves the middle of the state ladder:
+
+```
+IN_PROGRESS  --phase validating-->  VALIDATING  --phase review-->  KNOWLEDGE_GATE / READY_TO_MERGE
+```
+
+So a checkpoint is not only a record for the next session — it is how the
+work's phase becomes visible at all. An experiment that never gets a
+`--phase validating` checkpoint keeps reporting `IN_PROGRESS` while it runs.
+
 ## Content test
 
 The checkpoint is good enough if a new session, reading only the Work Issue,

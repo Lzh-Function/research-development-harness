@@ -244,6 +244,8 @@ class RecordAndStateTests(LifecycleTestCase):
         self.assertNotEqual(result.returncode, 0)
 
     def test_state_advances_through_the_flow(self):
+        self.assertEqual(self.rh_json(["status"])["state"]["state"], "IN_PROGRESS")
+        self.rh_json(["record", "checkpoint", "--phase", "validating", "--body", "### Next Action\nsweep"])
         self.assertEqual(self.rh_json(["status"])["state"]["state"], "VALIDATING")
         self.rh_json(["record", "result", "--body", "### Observation\nno effect at layer 7"])
         self.assertEqual(self.rh_json(["status"])["state"]["state"], "EVIDENCE_GATE")
@@ -473,10 +475,31 @@ class NextCommandGuidanceTests(LifecycleTestCase):
         self.commit("probe.py", "# probe\n", "begin work")
         self.sandbox.git(self.repo, ["push", "-q", "origin", "HEAD"])
         self.rh_json(["pr", "create"])
+        # Implementation is under way; the evidence gate being open is not
+        # evidence that an experiment is running.
+        self.assertEqual(self.rh_json(["status"])["state"]["state"], "IN_PROGRESS")
+        self.assertIn("record checkpoint", self.rh_json(["status"])["next_command"])
+
+        self.rh_json(["record", "checkpoint", "--phase", "validating", "--body", "### Next Action\nsweep"])
+        self.assertEqual(self.rh_json(["status"])["state"]["state"], "VALIDATING")
         self.assertIn("record result", self.rh_json(["status"])["next_command"])
 
         self.rh_json(["record", "result", "--body", "### Observation\nx"])
         self.assertIn("--gate evidence", self.rh_json(["status"])["next_command"])
+
+    def test_validating_after_the_evidence_gate_points_at_review(self):
+        """Suggesting another result after the gate passed would misdirect."""
+        issue = self.create_issue()
+        self.rh_json(["work", "link", str(issue)])
+        self.pass_gate(issue, "design")
+        self.start_work(issue)
+        self.rh_json(["record", "checkpoint", "--phase", "validating", "--body", "### Next Action\nsweep"])
+        self.assertIn("record result", self.rh_json(["status"])["next_command"])
+        self.rh_json(["record", "result", "--body", "### Observation\nx"])
+        self.pass_gate(issue, "evidence")
+        payload = self.rh_json(["status"])
+        self.assertEqual(payload["state"]["state"], "VALIDATING")
+        self.assertEqual(payload["next_command"], "rh record checkpoint --phase review")
 
     def test_terminal_state_explains_why_there_is_no_command(self):
         issue = self.create_issue(risk="low", evidence=False)

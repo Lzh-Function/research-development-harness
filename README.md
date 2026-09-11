@@ -222,7 +222,10 @@ Latest Checkpoint    (none)
 Pending Gates        design, evidence, knowledge
 Blockers             (none)
 Next Recorded Action (none)
+Next Command         rh record gate --gate design --outcome passed|overridden --issue 1
 ```
+
+最終行の `Next Command` は、**この状態を機械的に次へ進めるコマンド**です。gate の outcome は必ず選択肢のまま出ます（`passed|overridden`）。どちらを選ぶかは研究者の判断で、CLI は決めません。
 
 `Derived State` は専用 DB ではなく、Git と GitHub と record から毎回計算されます。high risk なので gate が 3 つ立ちました。
 
@@ -287,11 +290,29 @@ $ rh work start 1
 branch    rh/1-chirality-probe-across-message-passing-layers
 issue     #1
 pushed    True
-draft PR  #1000 https://github.com/mylab/chirality-gnn/pull/1000
+draft PR  (none) — no commits on this branch yet
+          GitHub cannot open a PR on a branch with no commits yet.
+          Commit your first change, then run: rh pr create
 note      uncommitted changes were preserved untouched
 ```
 
-branch を切り、push し、**Draft PR**（実装の台帳）を開きます。既存 branch で作業中なら:
+branch を切って push しました。**Draft PR はまだ開きません。** GitHub は commit が 1 つも無い branch に PR を作れないからです。失われるものは無く、`rh status` が次の一手を示します。
+
+```
+Derived State        IN_PROGRESS  — implementation is under way
+PR                   -
+Next Command         rh pr create
+```
+
+最初の commit を積んだら開きます。ここからが実装の台帳です。
+
+```
+$ rh pr create
+
+draft PR  #1000 https://github.com/mylab/chirality-gnn/pull/1000
+```
+
+既存 branch で作業中なら、そちらは既に commit があるのでその場で PR が開きます:
 
 ```
 👤 /rh-start 1 いま probe-analysis branch で書きかけのものがあるから、それを使って
@@ -528,9 +549,12 @@ probe の容量が固定であるため、表現の非線形化と情報消失�
 $ rh record gate --gate evidence --outcome passed --body-file gate-c.md
 $ rh status
 
-Derived State        EVIDENCE_GATE → 通過
+Derived State        VALIDATING  — evidence is being gathered
 Pending Gates        knowledge
+Next Command         rh record checkpoint --phase review
 ```
+
+evidence gate は通りましたが、状態はまだ `VALIDATING` です。**「実験フェーズを終える」と宣言するのは Agent の仕事**で、CLI が勝手に進めません。`Next Command` がその宣言を促しています。
 
 ---
 
@@ -546,6 +570,7 @@ $ rh ready
 NOT READY_TO_MERGE:
   - knowledge gate has no passing Gate Record
   - worktree has uncommitted changes
+  - PR body does not say what this work does NOT establish (the "Does NOT Establish" section is missing or empty)
 ```
 
 🤖 足りないものが決定論的に出ます。Agent は **記憶ではなく record から** PR 本文を合成します。
@@ -787,6 +812,32 @@ NOT READY_TO_MERGE:
 
 ---
 
+### 状態（Derived State）の一覧
+
+`rh status` が出す状態は、専用 DB ではなく **Git + GitHub + durable record から毎回計算**されます。上から順に判定され、先に当たったものが採用されます。
+
+| 状態 | 意味 | この状態になる条件 | 次の一手 |
+|---|---|---|---|
+| `UNTRACKED` | この branch は追跡外 | Work Issue に紐付いていない | `rh work link <n>` または scope から |
+| `DEFERRED` / `ABANDONED` | 保留 / 打ち切り | Issue の `rh:work` marker に `status` を書いた場合のみ（下記注） | — |
+| `DONE` | 完了 | Issue が closed、または PR が merged | — |
+| `DEVIATION_GATE` | 意味の変更が未決 | `--gate deviation --outcome blocked` が最新 | `rh record decision --status ...` |
+| `DESIGN_GATE` | 設計の合意が未取得 | medium/high risk で design gate 未通過 | `rh record gate --gate design ...` |
+| `SCOPED` | Issue はあるが未着手 | gate 不要（low risk）で branch も PR も無い | `rh work start <n>` |
+| `READY` | 着手できる | design gate 通過、branch も PR も無い | `rh work start <n>` |
+| `BLOCKED` | 止まっている | checkpoint の `Blocked By` が空でない、または `--phase blocked` | （人が解く） |
+| `EVIDENCE_GATE` | 証拠の解釈が未確定 | Result Record はあるが evidence gate 未通過 | `rh record gate --gate evidence ...` |
+| `VALIDATING` | 検証中 | `--phase validating`（または review 宣言済みだが Result Record が無い） | `rh record result` |
+| `KNOWLEDGE_GATE` | 理解の確認が未了 | `--phase review` で knowledge gate 未通過 | `rh record gate --gate knowledge ...` |
+| `IN_PROGRESS` | 実装中 | 上のどれにも当たらない | `rh record checkpoint` |
+| `READY_TO_MERGE` | RDH の終端 | `--phase review` で必要な gate が全て通過 | **研究者が merge する** |
+
+**「進んだ」ことは宣言によってのみ起こります。** gate が残っていないことは作業が終わった証拠ではないので、`IN_PROGRESS` → `VALIDATING` → `READY_TO_MERGE` は `rh record checkpoint --phase ...` による Agent の申告で動きます。CLI が diff を見て「実験中らしい」と推測することはありません。
+
+**注**: `DEFERRED` / `ABANDONED` に遷移させる CLI はまだありません。Issue 本文の `rh:work` marker に `"status":"deferred"` を手で書く必要があります。これは既知の欠落です。
+
+---
+
 ## 7. Human Gate は 4 つだけ
 
 | Gate | いつ | 何を確認するか |
@@ -855,7 +906,7 @@ branch を分けてください（作業 A → branch A、作業 B → branch B�
 ./run-tests -q
 ```
 
-332 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
+335 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
 
 - authoritative な設計文書: [docs/SPEC.md](docs/SPEC.md)
 - 実装上の判断と意図的な差分: [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)

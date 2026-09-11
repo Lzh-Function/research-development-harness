@@ -97,11 +97,25 @@ class DeriveStateTests(unittest.TestCase):
         low = WorkMarker(risk="low")
         self.assertEqual(self.state(marker=low, records=records, branch_linked=True, pr=9), "IN_PROGRESS")
 
-    def test_validating_when_evidence_outstanding(self):
+    def test_in_progress_before_the_agent_declares_validating(self):
+        """A pending evidence gate is not evidence that an experiment is running."""
         self.assertEqual(
             self.state(records=[gate("design", "passed")], branch_linked=True, pr=9),
-            "VALIDATING",
+            "IN_PROGRESS",
         )
+
+    def test_validating_only_once_declared(self):
+        records = [gate("design", "passed"), checkpoint(phase="validating")]
+        self.assertEqual(self.state(records=records, branch_linked=True, pr=9), "VALIDATING")
+
+    def test_review_without_evidence_is_still_validating(self):
+        """Declaring completion does not conjure the evidence the work needs."""
+        records = [gate("design", "passed"), checkpoint(phase="review")]
+        derived = derive_state(
+            config=self.config, issue=1, marker=self.marker, records=records, branch_linked=True, pr=9
+        )
+        self.assertEqual(derived.state, "VALIDATING")
+        self.assertIn("no Result Record", derived.reason)
 
     def test_evidence_gate_once_a_result_exists(self):
         records = [gate("design", "passed"), Record(kind="result", issue=1)]

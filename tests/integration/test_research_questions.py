@@ -190,7 +190,7 @@ class RQStateSourceTests(RQTestCase):
         states = {u["issue"]: u["state"] for u in payload["work_units"]}
         prs = {u["issue"]: u["pr"] for u in payload["work_units"]}
         self.assertEqual(states[unstarted], "READY", "work with no PR has not started")
-        self.assertEqual(states[started], "VALIDATING", "work with a Draft PR is under way")
+        self.assertEqual(states[started], "IN_PROGRESS", "work with a Draft PR is under way")
         self.assertIsNone(prs[unstarted])
         self.assertIsNotNone(prs[started])
 
@@ -214,4 +214,4 @@ class RQStateSourceTests(RQTestCase):
         )
         unit = next(u for u in payload["work_units"] if u["issue"] == issue)
         self.assertIsNotNone(unit["pr"])
-        self.assertEqual(unit["state"], "VALIDATING")
+        self.assertEqual(unit["state"], "IN_PROGRESS")

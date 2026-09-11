@@ -364,6 +364,11 @@ def _gather_work(session: Session, *, refresh: bool = True) -> dict[str, Any]:
     checkpoint = latest_checkpoint(records)
     result["next_command"] = next_command(derived.state, issue=link.issue, pr=pr_number)
     result["next_command_note"] = next_command_note(derived.state)
+    if derived.state == "VALIDATING" and "evidence" not in derived.pending_gates:
+        # Still in the validating phase, but the evidence gate has already
+        # passed: more results are possible, yet the mechanical next step is
+        # to declare the work ready for review.
+        result["next_command"] = "rh record checkpoint --phase review"
     if started and pr_number is None and result["next_command"] is not None:
         # Work is under way but has no Draft PR — usually because the branch
         # had no commits when it was created. `rh ready` will block on this.

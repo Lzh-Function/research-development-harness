@@ -38,6 +38,10 @@ This project follows semantic versioning for `runtime_version`,
   carry at least one filled Provenance field. Configurable under `[ready]`.
 - Research Questions are first-class: `rh rq create|list|show`, `rh log --rq`.
 - `rh pr create` opens the Draft PR once a new branch has its first commit.
+- `rh issue close` implements SPEC 24 close semantics: experiments and
+  analyses need a Result Record and a passed evidence gate first, because a
+  merged PR is not a scientific conclusion. Closing is reversible; RDH never
+  deletes an Issue.
 
 ### Fixed during implementation
 - `READY_TO_MERGE` is reachable only from a declared `--phase review`
@@ -50,3 +54,24 @@ This project follows semantic versioning for `runtime_version`,
   deviation gate can no longer outrank the gate that closed it.
 - Repository slug detection falls back to `gh` for remotes a URL parser
   cannot read (ssh aliases, `insteadOf` rewrites, enterprise hosts).
+
+### Found only by running against real GitHub
+- GitHub refuses to open a pull request on a branch with no commits — exactly
+  the state `rh work start` leaves a new branch in. It now reports that and
+  defers to `rh pr create`; the fake `gh` reproduces the refusal.
+- `gh repo view` rejects `--repo` (the repository is positional), so
+  `default_branch()` always failed and silently returned `None`.
+
+### Found only by writing the documentation
+- `VALIDATING` was returned whenever the evidence gate was pending, which is
+  true from the moment evidence-required work starts. `IN_PROGRESS` was
+  therefore unreachable for every experiment, and `rh status` announced
+  "evidence is being gathered" before the experiment existed. The phase the
+  agent declares now drives it.
+- `rh status` suggested `rh record result` after the evidence gate had already
+  passed; it now points at the review checkpoint.
+
+### Removed
+- `issue_edit_body` and `pr_comment` wrappers. Rewriting a Work Issue body
+  erases historical intent (SPEC 29) and PR comments are not a record store
+  (SPEC 25); providing the wrappers only made those mistakes easy to reach.
