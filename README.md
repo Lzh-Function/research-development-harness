@@ -1175,6 +1175,12 @@ branch を分けてください（作業 A → branch A、作業 B → branch B�
 
 335 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
 
-- authoritative な設計文書: [docs/SPEC.md](docs/SPEC.md)
-- 実装上の判断と意図的な差分: [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)
-- 要件と test の対応表: [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)
+| 文書 | 内容 |
+|---|---|
+| [docs/SPEC.md](docs/SPEC.md) | authoritative な設計文書 |
+| [docs/HANDOVER.md](docs/HANDOVER.md) | **引継書** — 現状、壊してはいけない不変条件、決定済み事項、既知の欠落 |
+| [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) | 実装上の判断と、仕様からの意図的な差分 |
+| [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) | 要件と test の対応表 |
+| [CHANGELOG.md](CHANGELOG.md) | 変更履歴 |
+
+この repository を改修する場合は、まず [docs/HANDOVER.md](docs/HANDOVER.md) を読んでください。

@@ -4,7 +4,11 @@ All notable changes to Research Development Harness are recorded here.
 This project follows semantic versioning for `runtime_version`,
 `bundle_version` and `record_schema_version` independently (SPEC 59).
 
-## [Unreleased]
+## [0.1.0] — 2026-09-11
+
+First release. Verified against real GitHub, not only against the fake `gh`.
+See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) for the requirement-to-test map
+and [docs/HANDOVER.md](docs/HANDOVER.md) for the state of the project.
 
 ### Added
 - Phase 0 — distribution repository scaffold, `bin/rh` launcher, command
