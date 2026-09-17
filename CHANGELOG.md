@@ -4,6 +4,21 @@ All notable changes to Research Development Harness are recorded here.
 This project follows semantic versioning for `runtime_version`,
 `bundle_version` and `record_schema_version` independently (SPEC 59).
 
+## [Unreleased]
+
+### Changed
+- Durable records are read with `gh issue view --json comments` instead of
+  `gh api --paginate`. `gh api` reaches any GitHub endpoint with the token, so
+  depending on it forced anyone isolating the token behind an allow-list to
+  grant unrestricted API access. Verified on real GitHub against an issue with
+  105 comments before switching.
+
+### Added
+- [docs/GH-SURFACE.md](docs/GH-SURFACE.md): every gh subcommand and flag RDH
+  issues, which `rh` command issues it, what breaks if it is denied, and the
+  constraints an allow-list alone does not enforce (`--body-file` paths,
+  `--repo` pinning, `git push`). A contract test holds the implementation to it.
+
 ## [0.1.0] — 2026-09-11
 
 First release. Verified against real GitHub, not only against the fake `gh`.

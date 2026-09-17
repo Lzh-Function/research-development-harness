@@ -78,10 +78,11 @@ def classify_failure(result: CommandResult) -> str:
 
 
 def parse_json_stream(text: str) -> Any:
-    """Parse ``gh api --paginate`` output.
+    """Parse JSON printed by ``gh``.
 
-    ``--paginate`` concatenates one JSON document per page; a single request
-    returns exactly one.  Concatenated arrays are flattened into one list.
+    Usually a single document. Concatenated documents (as ``--paginate``
+    style output produces) are tolerated, and concatenated arrays are
+    flattened into one list, so a future caller cannot silently lose pages.
     """
     decoder = json.JSONDecoder()
     index = 0
@@ -319,23 +320,36 @@ class GitHubClient:
         return result.out.strip()
 
     def issue_comments(self, number: int) -> list[dict[str, Any]]:
-        repo = self.repo or self.resolve_repo()
-        if not repo:
-            # Re-run the resolution through check() so the caller sees the real
-            # cause — offline, unauthenticated, or genuinely not a GitHub repo —
-            # instead of a generic "could not resolve" that hides all three.
-            self.check(["repo", "view", "--json", "nameWithOwner"], repo_scoped=False)
-            raise GitHubError(
-                "could not resolve the GitHub repository (owner/name)",
-                hint="Set github.repo in .research-harness/config.toml, or add a GitHub remote.",
+        """Every comment on an issue, oldest first, in a normalised shape.
+
+        Reads through ``gh issue view --json comments`` rather than ``gh api``.
+        ``gh api`` can call any GitHub endpoint with the caller's token, so a
+        harness that needs it forces anyone isolating the token from the agent
+        (a broker, a proxy, an allow-list) to grant unrestricted API access.
+        ``issue view`` returns every comment — verified past 100 on real GitHub,
+        where a paginated ``gh api`` call returned the same set in the same
+        order — so nothing is lost by the narrower command.
+
+        Returned keys: ``id``, ``body``, ``url``, ``author``, ``created_at``.
+        """
+        data = self.json(["issue", "view", str(number), "--json", "comments"])
+        raw = data.get("comments") if isinstance(data, dict) else None
+        out: list[dict[str, Any]] = []
+        for item in raw or []:
+            if not isinstance(item, dict):
+                continue
+            author = item.get("author")
+            login = author.get("login") if isinstance(author, dict) else author
+            out.append(
+                {
+                    "id": item.get("id"),
+                    "body": str(item.get("body") or ""),
+                    "url": str(item.get("url") or ""),
+                    "author": str(login or ""),
+                    "created_at": str(item.get("createdAt") or ""),
+                }
             )
-        data = self.json(
-            ["api", "--paginate", f"repos/{repo}/issues/{number}/comments", "--header", "Accept: application/vnd.github+json"],
-            repo_scoped=False,
-        )
-        if isinstance(data, dict):
-            return [data]
-        return [item for item in (data or []) if isinstance(item, dict)]
+        return out
 
     # Deliberately absent: `issue edit --body` and `pr comment`.
     # Rewriting a Work Issue body would erase historical intent (SPEC 29), and
@@ -361,8 +375,8 @@ class GitHubClient:
             record = parse_record(
                 body,
                 comment_id=str(comment.get("id")) if comment.get("id") is not None else None,
-                url=str(comment.get("html_url") or ""),
-                author=str((comment.get("user") or {}).get("login") or ""),
+                url=comment.get("url") or "",
+                author=comment.get("author") or "",
             )
             if record is not None:
                 if record.issue is None:

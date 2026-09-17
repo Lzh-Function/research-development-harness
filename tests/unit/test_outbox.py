@@ -45,7 +45,7 @@ class OutboxTests(unittest.TestCase):
         record = Record(kind="result", issue=4, body="b")
         self.outbox.enqueue(record)
         runner = FakeRunner()
-        runner.register(("gh", "api"), ok("[]"))
+        runner.register(("gh", "issue", "view"), ok('{"comments": []}'))
         runner.register(("gh", "issue", "comment"), ok("https://github.com/octo/research/issues/4#issuecomment-1"))
         report = self.outbox.sync(self.client(runner))
         self.assertEqual(len(report["posted"]), 1)
@@ -54,9 +54,9 @@ class OutboxTests(unittest.TestCase):
     def test_sync_is_idempotent_for_already_present_records(self):
         record = Record(kind="result", issue=4, body="b")
         self.outbox.enqueue(record)
-        comments = json.dumps([{"id": 1, "body": record.to_comment(), "html_url": "u", "user": {"login": "x"}}])
+        comments = json.dumps({"comments": [{"id": "IC_1", "body": record.to_comment(), "url": "u", "author": {"login": "x"}}]})
         runner = FakeRunner()
-        runner.register(("gh", "api"), ok(comments))
+        runner.register(("gh", "issue", "view"), ok(comments))
         runner.register(("gh", "issue", "comment"), ok("MUST NOT HAPPEN"))
         report = self.outbox.sync(self.client(runner))
         self.assertEqual(len(report["duplicate"]), 1)
@@ -71,8 +71,8 @@ class OutboxTests(unittest.TestCase):
         state = {"comments": []}
 
         def responder(argv, stdin):
-            if argv[1] == "api":
-                return ok(json.dumps(state["comments"]))
+            if argv[1:3] == ("issue", "view"):
+                return ok(json.dumps({"comments": state["comments"]}))
             index = argv.index("--body-file")
             state["comments"].append({"id": len(state["comments"]) + 1, "body": Path(argv[index + 1]).read_text(encoding="utf-8")})
             return ok("https://github.com/octo/research/issues/4#issuecomment-1")
@@ -97,7 +97,7 @@ class OutboxTests(unittest.TestCase):
         record = Record(kind="result", issue=4, body="b")
         self.outbox.enqueue(record)
         runner = FakeRunner()
-        runner.register(("gh", "api"), ok("[]"))
+        runner.register(("gh", "issue", "view"), ok('{"comments": []}'))
         report = self.outbox.sync(self.client(runner), dry_run=True)
         self.assertEqual(len(report["posted"]), 1)
         self.assertEqual(self.outbox.pending_count(), 1)

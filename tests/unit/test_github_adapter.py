@@ -59,13 +59,37 @@ class PaginationTests(unittest.TestCase):
     def test_empty_input(self):
         self.assertIsNone(parse_json_stream("   \n"))
 
-    def test_paginated_comments_are_read_whole(self):
-        pages = '[{"id":1,"body":"a"},{"id":2,"body":"b"}]\n[{"id":3,"body":"c"}]\n'
+    def test_comments_are_read_through_issue_view_not_gh_api(self):
+        """`gh api` reaches any endpoint with the token; RDH must not need it."""
+        payload = json.dumps(
+            {
+                "comments": [
+                    {"id": "IC_1", "body": "a", "url": "u1", "author": {"login": "x"}, "createdAt": "t1"},
+                    {"id": "IC_2", "body": "b", "url": "u2", "author": {"login": "y"}, "createdAt": "t2"},
+                ]
+            }
+        )
         runner = FakeRunner()
-        runner.register(("gh", "api"), ok(pages))
+        runner.register(("gh", "issue", "view"), ok(payload))
         comments = client(runner).issue_comments(5)
-        self.assertEqual([c["id"] for c in comments], [1, 2, 3])
-        self.assertIn("--paginate", runner.calls[0][0])
+        self.assertEqual([c["id"] for c in comments], ["IC_1", "IC_2"])
+        self.assertEqual(comments[1], {"id": "IC_2", "body": "b", "url": "u2", "author": "y", "created_at": "t2"})
+        argv = runner.calls[0][0]
+        self.assertEqual(list(argv[:5]), ["gh", "issue", "view", "5", "--json"])
+        self.assertEqual(argv[5], "comments")
+        self.assertNotIn("api", argv)
+
+    def test_comments_tolerate_missing_fields(self):
+        payload = json.dumps({"comments": [{"body": "only a body"}, "not-a-dict"]})
+        runner = FakeRunner(default=ok(payload))
+        comments = client(runner).issue_comments(5)
+        self.assertEqual(len(comments), 1)
+        self.assertEqual(comments[0]["author"], "")
+        self.assertIsNone(comments[0]["id"])
+
+    def test_issue_without_comments(self):
+        runner = FakeRunner(default=ok('{"comments": []}'))
+        self.assertEqual(client(runner).issue_comments(5), [])
 
 
 class ErrorTranslationTests(unittest.TestCase):
@@ -174,9 +198,9 @@ class BodyFileTests(unittest.TestCase):
 class IdempotencyTests(unittest.TestCase):
     def test_existing_uuid_is_not_reposted(self):
         record = Record(kind="checkpoint", issue=4, body="body")
-        comments = json.dumps([{"id": 1, "body": record.to_comment(), "html_url": "u", "user": {"login": "x"}}])
+        comments = json.dumps({"comments": [{"id": "IC_1", "body": record.to_comment(), "url": "u", "author": {"login": "x"}}]})
         runner = FakeRunner()
-        runner.register(("gh", "api"), ok(comments))
+        runner.register(("gh", "issue", "view"), ok(comments))
         runner.register(("gh", "issue", "comment"), ok("should-not-be-called"))
         url, created = client(runner).post_record(record)
         self.assertFalse(created)
@@ -185,7 +209,7 @@ class IdempotencyTests(unittest.TestCase):
 
     def test_new_uuid_is_posted(self):
         runner = FakeRunner()
-        runner.register(("gh", "api"), ok("[]"))
+        runner.register(("gh", "issue", "view"), ok('{"comments": []}'))
         runner.register(("gh", "issue", "comment"), ok("https://github.com/octo/research/issues/4#issuecomment-9"))
         url, created = client(runner).post_record(Record(kind="result", issue=4, body="b"))
         self.assertTrue(created)
@@ -194,18 +218,21 @@ class IdempotencyTests(unittest.TestCase):
     def test_records_parses_only_marked_comments(self):
         record = Record(kind="result", issue=4, body="## Result Record")
         comments = json.dumps(
-            [
-                {"id": 1, "body": "just a human comment", "html_url": "u1", "user": {"login": "a"}},
-                {"id": 2, "body": record.to_comment(), "html_url": "u2", "user": {"login": "b"}},
-            ]
+            {
+                "comments": [
+                    {"id": "IC_1", "body": "just a human comment", "url": "u1", "author": {"login": "a"}},
+                    {"id": "IC_2", "body": record.to_comment(), "url": "u2", "author": {"login": "b"}},
+                ]
+            }
         )
         runner = FakeRunner()
-        runner.register(("gh", "api"), ok(comments))
+        runner.register(("gh", "issue", "view"), ok(comments))
         records = client(runner).records(4)
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0].kind, "result")
         self.assertEqual(records[0].author, "b")
-        self.assertEqual(records[0].comment_id, "2")
+        self.assertEqual(records[0].url, "u2")
+        self.assertEqual(records[0].comment_id, "IC_2")
 
 
 class RepoFlagTests(unittest.TestCase):

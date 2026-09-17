@@ -22,7 +22,7 @@ Every requirement in SPEC 64 (Mandatory Acceptance Scenarios) and SPEC 70
 | 9 | `READY_TO_MERGE` reachable | `integration.test_work_lifecycle.RecordAndStateTests.test_state_advances_through_the_flow` |
 | 10 | The harness never merges | `integration.test_work_lifecycle.NoDestructiveOperationsTests`, `e2e.test_acceptance_scenarios.ScenarioH_KnowledgeGate.test_harness_never_merges_even_when_ready`, and `gh pr merge` exits 99 in the fake `gh` |
 | 11 | Outbox + idempotent sync on GitHub failure | `integration.test_offline_and_doctor.OfflineTests` (9 tests), `unit.test_outbox` |
-| 12 | Main behaviours covered by automated tests | 335 tests, standard library only |
+| 12 | Main behaviours covered by automated tests | 348 tests, standard library only |
 
 ## Mandatory Acceptance Scenarios (SPEC 64)
 
@@ -59,6 +59,20 @@ creation, PR read/update, pagination, auth failure, network failure, retry,
 duplicate UUID prevention: `unit.test_github_adapter` (24 tests) against a
 fake runner, and `integration.test_offline_and_doctor.OfflineTests` against the fake `gh` executable.
 No automated test requires a GitHub account or a network.
+
+## gh surface contract
+
+`integration.test_gh_surface.GhSurfaceContractTests` exercises every
+GitHub-facing command and holds the implementation to the machine-readable
+allow-list in [GH-SURFACE.md](GH-SURFACE.md): no undocumented subcommand or
+flag, no phantom entry, no `gh api`, every `--body-file` inside
+`.git/research-harness/tmp/`, and `--repo` always the pinned repository.
+Mutation-checked: removing a used entry from the document, adding an unused
+one, or reverting the implementation to `gh api` each makes it fail.
+
+Verified on real GitHub (2026-09-17) through a wrapper that denied `gh api`:
+records read in full from an issue with 105 comments, in order, and a resent
+UUID was not reposted.
 
 ## Beyond the spec
 

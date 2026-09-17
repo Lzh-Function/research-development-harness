@@ -214,8 +214,15 @@ def issue_command(state, args):
         body = body_of(args)
         comment_id = 100000 + sum(len(i.get("comments", [])) for i in state["issues"].values())
         url = "%s#issuecomment-%d" % (issue["url"], comment_id)
+        # Same shape as `gh issue view --json comments` returns on real GitHub.
         issue.setdefault("comments", []).append(
-            {"id": comment_id, "body": body, "html_url": url, "user": {"login": "fake-user"}}
+            {
+                "id": "IC_fake%010d" % comment_id,
+                "body": body,
+                "url": url,
+                "author": {"login": "fake-user"},
+                "createdAt": next_timestamp(state),
+            }
         )
         save(state)
         out(url)
@@ -359,24 +366,11 @@ def pr_command(state, args):
 
 
 def api_command(state, args):
-    paginate = "--paginate" in args
-    if paginate:
-        args.remove("--paginate")
-    path = args[1] if len(args) > 1 else ""
-    parts = path.strip("/").split("/")
-    # repos/{owner}/{repo}/issues/{n}/comments
-    if len(parts) >= 6 and parts[0] == "repos" and parts[3] == "issues" and parts[5] == "comments":
-        issue = state["issues"].get(parts[4])
-        comments = issue.get("comments", []) if issue else []
-        if paginate and len(comments) > 2:
-            # Emit multiple pages, exactly as `gh api --paginate` concatenates them.
-            for start in range(0, len(comments), 2):
-                out(json.dumps(comments[start : start + 2]))
-            return 0
-        out(json.dumps(comments))
-        return 0
-    sys.stderr.write("fake gh: unsupported api path: %s\n" % path)
-    return 2
+    # RDH must never need `gh api`: it can reach any endpoint with the token,
+    # so requiring it defeats anyone isolating the token behind an allow-list.
+    # Fail loudly, like `pr merge`, so a regression is impossible to miss.
+    sys.stderr.write("fake gh: `gh api` must never be invoked by RDH\n")
+    return 99
 
 
 if __name__ == "__main__":

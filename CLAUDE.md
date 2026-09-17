@@ -21,6 +21,7 @@
 ```
 
 - **README の出力例は必ず実際に採取する。** 手で書かない。`tests/support.py` の `Sandbox` が使える。過去に作文した例が実装のバグを隠していた。
-- **`gh` 呼び出しを足したら実 API でも 1 回叩く。** fake `gh` は 2 回、実挙動と食い違っていた。
+- **`gh` 呼び出しを足したら、[docs/GH-SURFACE.md](docs/GH-SURFACE.md) の許可リストも更新し、実 API でも 1 回叩く。** 許可リストはテストが実装と照合する。fake `gh` は 2 回、実挙動と食い違っていた。
+- **`gh api` を使わない。** 任意の API を token 付きで叩けるため、token をエージェントから隔離する運用を壊す。fake `gh` は呼ばれると exit 99 で落ちる。
 - テスト数を変えたら README 末尾と `docs/ACCEPTANCE.md` の数値も直す。
 - commit message は日本語で、**何をしたか**より**なぜそうしたか**を書く。

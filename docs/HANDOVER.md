@@ -1,6 +1,6 @@
 # 引継書 — Research Development Harness v0.1.0
 
-最終更新: 2026-09-11 / runtime 0.1.0 / bundle 0.1.0 / record schema 1
+最終更新: 2026-09-17 / runtime 0.1.0（未リリースの変更あり） / bundle 0.1.0 / record schema 1
 
 このファイルは、**このプロジェクトを次に触る人（または次の Agent session）**
 向けの引継ぎです。何が出来ていて、何が意図的にそうなっていて、何が欠けて
@@ -11,7 +11,7 @@
 
 ## 1. いまの状態
 
-- **v0.1.0**、335 tests green、standard library のみ（pytest 不要）。
+- **v0.1.0** + 未リリースの変更（CHANGELOG の Unreleased）、348 tests green、standard library のみ（pytest 不要）。
 - 実物の GitHub に対する live E2E 済み。fake `gh` だけでは見つからない不整合を 2 件、そこで発見して修正した。
 - **実運用実績はゼロ。** テストしたシナリオは、すべて実装者が想像したもの。
 
@@ -37,6 +37,8 @@
 | record は追記のみ、過去を書き換えない | `github.py` に edit 系を置かない | — （wrapper 自体を削除済み） |
 | CLI に科学的判断を入れない | `state.py` / `cli.py` | — （設計判断。レビューで守る） |
 | merge しない | `github.py` に merge 系なし | fake gh が `pr merge` で exit 99 |
+| **`gh api` を使わない** | record は `issue view --json comments` で読む | fake gh が `gh api` で exit 99、`integration.test_gh_surface` |
+| **gh の発行範囲は文書どおり** | [GH-SURFACE.md](GH-SURFACE.md) の許可リスト | `integration.test_gh_surface`（文書と実装の双方向照合） |
 
 ---
 
@@ -49,6 +51,7 @@
 | **`rh log` は横断、`rh resume` は深掘り** | 役割を混ぜない。`log` を `resume` の代用にしない旨を workflow に明記済み。 |
 | **`rq show` は結論を合成しない** | Result Record の記述を原文のまま並べるだけ。問いへの答えは研究者が決める。 |
 | **完了は宣言による** | gate が残っていないことは終わった証拠ではない。`--phase review` の宣言でのみ `READY_TO_MERGE` に到達する。 |
+| **token 隔離の利用者を壊さない** | エージェントの token を broker の向こうに隠す運用がある。`gh api` や任意パスの `--body-file` に依存すると、その運用で隔離が破れるか動かなくなる。2026-09-17 に `gh api` 依存を除去した。 |
 | **記録は Work Issue comment のみ** | PR comment は record store にしない（SPEC 25）。そのための wrapper も置かない。 |
 
 ---
@@ -65,6 +68,8 @@
 **ドキュメントを書くとバグが出る。** README の実例を現行コードで再現し直したら、`IN_PROGRESS` が evidence 系の作業で到達不能になっていることが判明した（`VALIDATING` を「evidence gate が pending なら」で返していた）。
 
 → **README の出力例は必ず実際に採取すること。** 手で書いた例は嘘になるし、嘘を書いた瞬間に実装の誤りが見えなくなる。採取用スクリプトは `tests/support.py` の `Sandbox` がそのまま使える。
+
+**「動く」ことと「隔離された環境で動く」ことは別。** record 読み出しが `gh api` に依存していたため、token を許可リストで隔離する構成では、`gh api` を許可する（＝隔離を無効化する）か、RDH が動かないかの二択になっていた。gh 呼び出しを足すときは、**それが許可リストに載せて安全なコマンドか**を考えること。
 
 **テストが現実に起こり得ない前提を書いていることがある。** PR 遅延を実装したら 17 件落ちたが、全部「commit 無し branch に PR が作れる」前提だった。
 
@@ -87,7 +92,7 @@
 
 **実装を変えたら**: `./run-tests -q`。テスト数が変わったら README 末尾と `docs/ACCEPTANCE.md` の数値も直す（両方に書いてある）。
 
-**`gh` 呼び出しを足したら**: `tests/fixtures/fake_gh.py` に対応を足し、**実 API でも 1 回叩く**。`GitHubClient._NO_REPO_FLAG` に注意（`--repo` を受けないサブコマンドがある）。
+**`gh` 呼び出しを足したら**: `tests/fixtures/fake_gh.py` に対応を足し、**[GH-SURFACE.md](GH-SURFACE.md) の許可リストを更新し**（しないと `test_gh_surface` が落ちる）、**実 API でも 1 回叩く**。`gh api` は使わない。`GitHubClient._NO_REPO_FLAG` に注意（`--repo` を受けないサブコマンドがある）。
 
 **CLI を足したら**: README 第 7 節の表、該当する `bundle/workflows/*.md`、`CHANGELOG.md`。文書と実装の突き合わせは、コマンドとフラグを argparse から抜いて grep する使い捨てスクリプトで機械的に確認できる。
 
@@ -106,6 +111,7 @@ live E2E の成果物。確認用に開いたままなので、不要なら clos
 - PR [#3](https://github.com/Lzh-Function/research-development-harness/pull/3) — Draft のまま（**RDH が merge しないことの実物の証拠**）
 - branch `rh/2-live-e2e-full-work-lifecycle-against-real-github`
 - Issue #4 は close 済み（close precondition の確認用）
+- Issue #5 は close 済み（`issue view --json comments` が comment 105 件を全件返すことの確認用。記録用に残してある）
 
 **この repo 自身は RDH に self-adopt していない。** SPEC 66 の想定どおり dogfooding は可能な段階にあるが、まだやっていない。
 

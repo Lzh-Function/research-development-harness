@@ -169,6 +169,15 @@ in a live run. `rh work start` now detects it, says so plainly, and defers;
 `rh pr create` opens the PR after the first commit, and `rh status` points
 there.
 
+**No `gh api`.** Records were first read with `gh api --paginate
+repos/…/issues/N/comments`. That forces anyone isolating the token from the
+agent to allow `gh api`, which reaches any endpoint with the token — the
+isolation becomes decorative. Records are now read with `gh issue view N
+--json comments`. Before switching, both were run against a real issue with
+105 comments: identical set, identical order, no truncation at 100. The fake
+`gh` now exits 99 on `gh api`, and the full surface is a tested contract in
+[GH-SURFACE.md](GH-SURFACE.md).
+
 ## Platform assumptions, verified
 
 Checked against official documentation in September 2026 rather than assumed

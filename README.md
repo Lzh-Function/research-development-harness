@@ -1162,6 +1162,9 @@ branch を分けてください（作業 A → branch A、作業 B → branch B�
 **Q. Skill を呼び忘れたらどうなるのか**
 `AGENTS.md` / `CLAUDE.md` の managed block は毎 session 自動で読まれるので、Skill を呼ばなくても「chat history ではなく repo-local state から復元しろ」「medium/high は実装前に scope しろ」「checkpoint を残せ」までは Agent に届きます。ただし **これらは指示であって、hook による強制ではありません**。Agent が `rh` を一度も呼ばなければ RDH は何も起きません。技術的に硬いのは、Agent が `rh` を呼んだ後（design gate 未取得なら `rh work start` が exit 3 で止まる、など）だけです。**session 冒頭の `/rh-resume` だけは明示的に打つ**のが確実です。
 
+**Q. エージェントを container で動かしたい。token は渡すべき？**
+Issue 作成・PR 作成・record 投稿はエージェントの仕事として設計されているので、**エージェントが GitHub に書けないと Skill 駆動の流れが手作業に崩れます**。`gh auth login` は不要で、`GH_TOKEN` 環境変数で足ります。その場合は対象 repo だけに絞った fine-grained token にしてください。token をエージェントから完全に隠したいなら、gh を許可リスト付きの broker の向こうに置く構成になります。**RDH が発行する gh コマンドはすべて [docs/GH-SURFACE.md](docs/GH-SURFACE.md) に列挙してあり**、実装がそこから外れるとテストが落ちます。RDH は `gh api`（任意の API を叩ける）を使いません。`git push` は gh の外なので別途認証が要ります。
+
 **Q. `rh doctor` が gh で ERROR を出す**
 `gh` が未 install か未認証です。RDH は `gh` を勝手に install しません。`gh auth login` してください。
 
@@ -1173,7 +1176,7 @@ branch を分けてください（作業 A → branch A、作業 B → branch B�
 ./run-tests -q
 ```
 
-335 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
+348 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
 
 | 文書 | 内容 |
 |---|---|
@@ -1181,6 +1184,7 @@ branch を分けてください（作業 A → branch A、作業 B → branch B�
 | [docs/HANDOVER.md](docs/HANDOVER.md) | **引継書** — 現状、壊してはいけない不変条件、決定済み事項、既知の欠落 |
 | [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) | 実装上の判断と、仕様からの意図的な差分 |
 | [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) | 要件と test の対応表 |
+| [docs/GH-SURFACE.md](docs/GH-SURFACE.md) | RDH が発行する gh コマンドの完全な一覧。token を隔離する broker や許可リストを作る人向け |
 | [CHANGELOG.md](CHANGELOG.md) | 変更履歴 |
 
 この repository を改修する場合は、まず [docs/HANDOVER.md](docs/HANDOVER.md) を読んでください。
