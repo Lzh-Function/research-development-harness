@@ -12,6 +12,8 @@ history.** Start with:
 "$(git rev-parse --show-toplevel)/.research-harness/bin/rh" status
 ```
 
+**Write Work Issues, Research Questions, PR bodies, and records in Japanese.**
+
 - Scope medium/high-impact new work before implementing it.
 - Do not interrupt the researcher for routine implementation details
   (naming, typing, fixtures, layout, routine refactors, logging, lint).

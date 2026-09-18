@@ -18,6 +18,9 @@ This project follows semantic versioning for `runtime_version`,
   issues, which `rh` command issues it, what breaks if it is denied, and the
   constraints an allow-list alone does not enforce (`--body-file` paths,
   `--repo` pinning, `git push`). A contract test holds the implementation to it.
+- `bundle/managed-instructions.md`: an explicit instruction to write Work
+  Issues, Research Questions, PR bodies and records in Japanese. The
+  researcher's own working language, not a project-specific default.
 
 ## [0.1.0] — 2026-09-11
 
