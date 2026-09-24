@@ -22,6 +22,14 @@ This project follows semantic versioning for `runtime_version`,
   Issues, Research Questions, PR bodies and records in Japanese. The
   researcher's own working language, not a project-specific default.
 
+### Fixed
+- `state.blocked_reason()` only recognised English "no blocker" phrasing
+  (`none`, `n/a`, `nothing`, `-`). Once records are written in Japanese (see
+  above), a Checkpoint Record's `Blocked By: なし。` was misread as an active
+  blocker, wrongly forcing `BLOCKED` state and failing `rh ready`. Added
+  Japanese equivalents (`なし`, `無し`, `特になし`, `該当なし`) and full-width
+  `。` stripping. Found via real usage on `pan-core` Work Issue #19.
+
 ## [0.1.0] — 2026-09-11
 
 First release. Verified against real GitHub, not only against the fake `gh`.

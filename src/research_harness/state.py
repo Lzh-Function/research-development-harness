@@ -184,8 +184,8 @@ def blocked_reason(record: Record | None) -> str | None:
     text = extract_section(record.body, "Blocked By")
     if not text:
         return None
-    normalized = text.strip().lower().strip(".")
-    if normalized in {"", "none", "n/a", "nothing", "-"}:
+    normalized = text.strip().lower().strip(".。")
+    if normalized in {"", "none", "n/a", "nothing", "-", "なし", "無し", "特になし", "該当なし"}:
         return None
     return text.strip()
 
