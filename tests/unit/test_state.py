@@ -335,6 +335,15 @@ class StructuralReadyChecks(unittest.TestCase):
         body = "### Provenance\n\n- commit:\n- run ID: slurm-88213\n- seed:"
         self.assertEqual(self.check(result_body=body)[0], [])
 
+    def test_japanese_provenance_heading_is_accepted(self):
+        """Records are written in Japanese; a 出所 section with a filled field counts."""
+        body = "### 出所\n\n- commit: 86b3ab6\n- artifact: results/"
+        self.assertEqual(self.check(result_body=body)[0], [])
+
+    def test_empty_japanese_provenance_heading_still_blocks(self):
+        problems, _ = self.check(result_body="### 出所\n\n- commit:\n- seed:")
+        self.assertTrue(any("Provenance" in p for p in problems))
+
     def test_low_risk_work_is_untouched(self):
         """The checks exist for evidence, not for every change."""
         problems, _ = self.check(evidence=False, pr_body="## Purpose\n\nx", result_body="no provenance")

@@ -47,6 +47,10 @@ artifact path or URL).
 Raw logs and artifacts stay where they are; GitHub holds the pointer, not the
 payload.
 
+The Provenance section is checked by `rh ready`: title it `Provenance` (or `出所`)
+and write at least one `- key: value` line. Any other title is not recognised,
+and a record cannot be edited afterwards.
+
 ## Gate
 
 Sections: Validated Concepts / Misconceptions Repaired / Unresolved / Outcome.

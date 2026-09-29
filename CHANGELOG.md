@@ -7,6 +7,9 @@ This project follows semantic versioning for `runtime_version`,
 ## [Unreleased]
 
 ### Changed
+- `rh ready` の Provenance 検査は、見出し `Provenance` に加えて `出所` も認識する。
+  記録を日本語で書くようにしたため、見出しを訳しただけで検査に落ちる事故が起きた。
+  記録は追記のみで書き換えられないので、規則側で受けるようにした。
 - 記録の書き方を「読み手の負荷を下げる」ことを最優先にした（`bundle/policy/records.md` の
   "Writing for the reader"）。手順は what / on which data / how / output の表、結果は
   平易な要約文＋表で書く。Result / Work Issue / PR の template に手順表と結果表の型を追加し、

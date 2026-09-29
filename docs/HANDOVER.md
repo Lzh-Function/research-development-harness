@@ -11,7 +11,7 @@
 
 ## 1. いまの状態
 
-- **v0.1.0** + 未リリースの変更（CHANGELOG の Unreleased）、348 tests green、standard library のみ（pytest 不要）。
+- **v0.1.0** + 未リリースの変更（CHANGELOG の Unreleased）、350 tests green、standard library のみ（pytest 不要）。
 - 実物の GitHub に対する live E2E 済み。fake `gh` だけでは見つからない不整合を 2 件、そこで発見して修正した。
 - **実運用実績はゼロ。** テストしたシナリオは、すべて実装者が想像したもの。
 

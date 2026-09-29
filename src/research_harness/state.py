@@ -21,6 +21,9 @@ from typing import Any
 
 from .config import Config
 from .records import Record, WorkMarker, extract_section, filled_fields, is_placeholder, latest
+
+# Headings that count as the Provenance section of a Result Record.
+PROVENANCE_HEADINGS = ("Provenance", "出所")
 from .util import atomic_write, iso_timestamp, slugify
 
 # Derived states (SPEC 32), ordered from least to most advanced.
@@ -386,7 +389,11 @@ def ready_blockers(
                 )
     if evidence_required and config.require_provenance:
         for record in [r for r in records if r.kind == "result"]:
-            provenance = extract_section(record.body, "Provenance")
+            # Records are written in Japanese, so the section may be titled 出所.
+            provenance = next(
+                (text for name in PROVENANCE_HEADINGS if (text := extract_section(record.body, name))),
+                None,
+            )
             if not filled_fields(provenance):
                 problems.append(
                     f"Result Record {record.id[:8]} has no filled-in Provenance "

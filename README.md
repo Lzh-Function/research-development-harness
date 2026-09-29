@@ -1176,7 +1176,7 @@ Issue 作成・PR 作成・record 投稿はエージェントの仕事として�
 ./run-tests -q
 ```
 
-348 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
+350 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
 
 | 文書 | 内容 |
 |---|---|
