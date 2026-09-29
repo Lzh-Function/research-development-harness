@@ -8,11 +8,13 @@
 
 ## Method
 
-<!-- How this answers the question. Why this approach rather than the obvious alternative. -->
+<!-- How this answers the question, as numbered steps in plain words (what / on which data / how).
+     Why this approach rather than the obvious alternative. -->
 
 ## Data Flow
 
-<!-- input → transformation → output. Name the actual artifacts. -->
+<!-- input → transformation → output. Name the actual artifacts, and say what each one is
+     (its role and pipeline stage), not only its path. -->
 
 ## Assumptions
 

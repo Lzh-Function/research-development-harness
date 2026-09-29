@@ -4,15 +4,29 @@
 
 <!-- What this run was supposed to answer. -->
 
+### What was done (steps)
+
+<!-- One row per step, in plain words. See policy/records.md "Writing for the reader". -->
+
+| Step | Data used (stage, count) | How | Output |
+|---|---|---|---|
+
+### What became clear
+
+<!-- One to three plain sentences. Details go in the tables below. -->
+
 ### Run / Evidence
 
-<!-- What was actually executed. -->
+<!-- Which scripts / commands were actually executed (paths, commit). -->
 
 ### Observation
 
 <!-- What happened. No adjectives, no conclusions. -->
 
 ### Primary Metrics
+
+<!-- Tables, not prose. Rows = things compared, columns = the few numbers that matter.
+     One line under each table: how to read it. -->
 
 | Metric | Value | Baseline |
 |---|---|---|

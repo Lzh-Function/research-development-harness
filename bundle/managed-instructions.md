@@ -12,7 +12,9 @@ history.** Start with:
 "$(git rev-parse --show-toplevel)/.research-harness/bin/rh" status
 ```
 
-**Write Work Issues, Research Questions, PR bodies, and records in Japanese.**
+**Write Work Issues, Research Questions, PR bodies, and records in Japanese,
+for a cold reader: steps as what / on which data / how / output, results as a
+plain lead sentence plus tables (see `policy/records.md`, "Writing for the reader").**
 
 - Scope medium/high-impact new work before implementing it.
 - Do not interrupt the researcher for routine implementation details

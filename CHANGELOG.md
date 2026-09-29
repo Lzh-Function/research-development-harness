@@ -7,6 +7,11 @@ This project follows semantic versioning for `runtime_version`,
 ## [Unreleased]
 
 ### Changed
+- 記録の書き方を「読み手の負荷を下げる」ことを最優先にした（`bundle/policy/records.md` の
+  "Writing for the reader"）。手順は what / on which data / how / output の表、結果は
+  平易な要約文＋表で書く。Result / Work Issue / PR の template に手順表と結果表の型を追加し、
+  `_common.md`・managed block・全 skill（Claude / Codex）から規則へ誘導する。skill 本文は
+  thin adapter のまま、誘導の 1 文だけを足した。
 - Durable records are read with `gh issue view --json comments` instead of
   `gh api --paginate`. `gh api` reaches any GitHub endpoint with the token, so
   depending on it forced anyone isolating the token behind an allow-list to

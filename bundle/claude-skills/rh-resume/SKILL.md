@@ -31,7 +31,8 @@ Codex both follow — lives in the repository, not in this file.
    (`.research-harness/policy/`) when they apply.
 
 4. Do the semantic work yourself — intent, risk, grills, deviation detection,
-   evidence interpretation, record prose. Leave Git/GitHub state, record
+   evidence interpretation, record prose (write for a cold reader: follow
+   "Writing for the reader" in `.research-harness/policy/records.md`). Leave Git/GitHub state, record
    serialization, state derivation and gate prerequisite checks to `rh`.
 
 ## Boundaries

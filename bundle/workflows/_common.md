@@ -30,3 +30,10 @@ reconstruct Git/GitHub state by hand when `rh` can report it.
 * `rh` exits non-zero → read the message; it names the unmet precondition.
   Do not work around it by running raw `git`/`gh` destructive commands.
 * Unsafe operation refused → that is deliberate. Surface it; do not retry.
+
+## Writing
+
+Everything you write for a human (Issues, Research Questions, PR bodies,
+records) follows "Writing for the reader" in `policy/records.md`: steps as
+what / on which data / how / output, results as a plain lead sentence plus
+tables, terms explained on first use.

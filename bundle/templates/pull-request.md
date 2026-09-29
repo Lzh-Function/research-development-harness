@@ -22,11 +22,13 @@
 
 ## Validation
 
-<!-- What was actually run. Tests, checks, experiments. -->
+<!-- What was actually run, as steps: what / on which data / how / output.
+     A small table is fine. See policy/records.md "Writing for the reader". -->
 
 ## Evidence
 
-<!-- Summarise Result Records; link them. -->
+<!-- Summarise Result Records: a plain lead sentence, then a table of the
+     numbers that matter. Link the records. -->
 
 ## Interpretation
 
