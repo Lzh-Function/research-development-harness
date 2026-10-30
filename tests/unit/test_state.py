@@ -86,6 +86,22 @@ class DeriveStateTests(unittest.TestCase):
     def test_design_gate_blocks_first(self):
         self.assertEqual(self.state(), "DESIGN_GATE")
 
+    def test_discussing_checkpoint_holds_the_design_gate(self):
+        """A large theme is discussed first; the gate is not offered meanwhile."""
+        records = [checkpoint(phase="discussing")]
+        self.assertEqual(self.state(records=records), "DISCUSSING")
+        self.assertIn("checkpoint", next_command("DISCUSSING", issue=7))
+        self.assertNotIn("gate", next_command("DISCUSSING", issue=7))
+
+    def test_design_gate_returns_when_the_discussion_phase_ends(self):
+        records = [checkpoint(phase="discussing", at="2026-01-01T00:00:00Z"),
+                   checkpoint(phase="implementing", at="2026-01-02T00:00:00Z")]
+        self.assertEqual(self.state(records=records), "DESIGN_GATE")
+
+    def test_passed_design_gate_ends_the_discussion(self):
+        records = [checkpoint(phase="discussing"), gate("design", "passed")]
+        self.assertEqual(self.state(records=records), "READY")
+
     def test_scoped_when_no_gate_required(self):
         self.assertEqual(self.state(marker=WorkMarker(risk="low")), "SCOPED")
 

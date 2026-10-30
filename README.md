@@ -1089,6 +1089,7 @@ NOT READY_TO_MERGE:
 | `DEFERRED` / `ABANDONED` | 保留 / 打ち切り | Issue の `rh:work` marker に `status` を書いた場合のみ（下記注） | — |
 | `DONE` | 完了 | Issue が closed、または PR が merged | — |
 | `DEVIATION_GATE` | 意味の変更が未決 | `--gate deviation --outcome blocked` が最新 | `rh record decision --status ...` |
+| `DISCUSSING` | 方向性を会話で決めている最中 | design gate が未通過で、最新 checkpoint が `--phase discussing` | `rh record checkpoint --phase discussing`（論点が決まるたび）。design gate は研究者が検討の終了を宣言してから |
 | `DESIGN_GATE` | 設計の合意が未取得 | medium/high risk で design gate 未通過 | `rh record gate --gate design ...` |
 | `SCOPED` | Issue はあるが未着手 | gate 不要（low risk）で branch も PR も無い | `rh work start <n>` |
 | `READY` | 着手できる | design gate 通過、branch も PR も無い | `rh work start <n>` |
@@ -1176,7 +1177,7 @@ Issue 作成・PR 作成・record 投稿はエージェントの仕事として�
 ./run-tests -q
 ```
 
-350 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
+353 tests、standard library のみ、外部依存なしで動きます。GitHub は fake `gh` executable 経由で検証しているため、**自動 test に GitHub account も network も不要**です。
 
 | 文書 | 内容 |
 |---|---|

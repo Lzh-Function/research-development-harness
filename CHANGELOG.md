@@ -7,6 +7,11 @@ This project follows semantic versioning for `runtime_version`,
 ## [Unreleased]
 
 ### Changed
+- 大きなテーマは、Design Gateの前に、研究者との会話で方向性を決める段階を置けるようにした。
+  `rh record checkpoint --phase discussing` で論点ごとの検討をIssueに追記でき、そのあいだ
+  `rh status` は `DESIGN_GATE` ではなく `DISCUSSING` を返す。Design Gateは、研究者が検討の
+  終了を宣言してから取る（`workflows/scope.md` の手順0、`workflows/checkpoint.md`、
+  `policy/human-gates.md`、`policy/workflow.md`、managed block）。
 - `rh ready` の Provenance 検査は、見出し `Provenance` に加えて `出所` も認識する。
   記録を日本語で書くようにしたため、見出しを訳しただけで検査に落ちる事故が起きた。
   記録は追記のみで書き換えられないので、規則側で受けるようにした。

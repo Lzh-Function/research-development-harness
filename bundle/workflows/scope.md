@@ -5,6 +5,35 @@ the Design Gate if the work warrants one.
 
 Read `_common.md` first.
 
+## 0. Large, open-ended themes: settle the direction first
+
+If the researcher calls the theme large ("一大プロジェクト"), or the aim, data,
+or method are still open, do **not** draft a scope or offer the Design Gate yet.
+This is not a survey task. Talk it through with the researcher, one point at a
+time, starting from the smallest decision (for example: what is the minimum aim
+for the training data?). Bring numbers from the data when they help the
+decision, and never decide for the researcher.
+
+1. Create the Work Issue with a short scope (steps 1–5 below; it can be
+   revised). The Issue is the place where the discussion is kept.
+2. Each time a point is settled, or a body of evidence is gathered for it,
+   append a checkpoint with `--phase discussing`:
+
+   ```bash
+   "$RH" record checkpoint --issue <n> --phase discussing --body-file <file>
+   ```
+
+   Write what was looked at, on which data, what the numbers were, and what
+   the researcher decided (and what is still open). Follow "Writing for the
+   reader" in `policy/records.md`. `rh status` then reports `DISCUSSING`
+   instead of `DESIGN_GATE`.
+3. Do not mention or run the Design Gate while the state is `DISCUSSING`. Take
+   it only after the researcher says the discussion is complete. At that
+   point, the Gate questions (`policy/human-gates.md`, Gate A) are drawn from
+   the discussion records, and `rh record gate --gate design` ends the phase.
+4. Nothing is implemented or run at scale in this phase. Small read-only
+   counts that inform a decision are fine.
+
 ## 1. Understand the request
 
 Read `rh context --json`. Read the surrounding code and any linked Research
@@ -72,8 +101,9 @@ machine marker itself.
 
 ## 6. Design Gate
 
-If `rh status --json` lists `design` in `pending_gates`, run the Design Gate
-now (`policy/human-gates.md`, Gate A), then record it:
+If the state is `DISCUSSING`, skip this step until the researcher ends the
+discussion (step 0). Otherwise, if `rh status --json` lists `design` in
+`pending_gates`, run the Design Gate now (`policy/human-gates.md`, Gate A), then record it:
 
 ```bash
 "$RH" record gate --gate design --outcome passed --body-file <file>

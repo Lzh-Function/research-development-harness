@@ -21,6 +21,8 @@ Research idea
   → Scope draft            (rh-scope)
   → Researcher confirms scope
   → Work Issue             (rh issue create)
+  → Direction-setting discussion, large themes only
+                           (rh record checkpoint --phase discussing)
   → [Gate A — Design]      (rh record gate --gate design)
   → Draft PR + work        (rh work start)
       ↳ significant deviation → [Gate B] → Decision Record

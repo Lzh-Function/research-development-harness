@@ -30,6 +30,7 @@ from .util import atomic_write, iso_timestamp, slugify
 STATES: tuple[str, ...] = (
     "UNTRACKED",
     "SCOPED",
+    "DISCUSSING",
     "DESIGN_GATE",
     "READY",
     "IN_PROGRESS",
@@ -46,7 +47,9 @@ STATES: tuple[str, ...] = (
 
 #: Declared by the agent on a checkpoint; keeps state derivation deterministic
 #: without asking the CLI to judge what the work is doing.
-PHASES: tuple[str, ...] = ("implementing", "validating", "blocked", "review")
+#: ``discussing`` is for large, open-ended themes: the researcher and the agent are
+#: still settling the direction, so the Design Gate is deliberately not offered yet.
+PHASES: tuple[str, ...] = ("implementing", "validating", "blocked", "review", "discussing")
 
 PASSING_GATE_OUTCOMES = frozenset({"passed", "repaired", "overridden"})
 
@@ -256,6 +259,14 @@ def derive_state(
             blockers,
         )
 
+    if "design" in pending and phase == "discussing":
+        return DerivedState(
+            "DISCUSSING",
+            "the direction is still being settled with the researcher; the design gate waits until they say the discussion is complete",
+            pending,
+            blockers,
+        )
+
     if "design" in pending:
         return DerivedState("DESIGN_GATE", "the design gate has no passing Gate Record yet", pending, blockers)
 
@@ -309,6 +320,7 @@ def next_command(state: str, *, issue: int | None = None, pr: int | None = None)
     table: dict[str, str | None] = {
         "UNTRACKED": f"rh work link {number}   (or scope new work first)",
         "SCOPED": f"rh work start {number}",
+        "DISCUSSING": "rh record checkpoint --phase discussing   (as each point is settled)",
         "DESIGN_GATE": f"rh record gate --gate design --outcome passed|overridden --issue {number}",
         "READY": f"rh work start {number}",
         "IN_PROGRESS": "rh record checkpoint   (at a meaningful boundary)",

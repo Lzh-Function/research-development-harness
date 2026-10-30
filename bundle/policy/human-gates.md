@@ -19,6 +19,11 @@ Ask open-ended questions (roughly 3–5 for medium work, 5–8 for high) about:
 - What observation would support or refute the hypothesis
 - What this design cannot establish
 
+For a large, open-ended theme, Gate A comes **after** the direction-setting
+discussion (`workflows/scope.md`, step 0), not before it. Take it only when
+the researcher says the discussion is complete, and draw the questions from the
+discussion records.
+
 Stop early once understanding is demonstrated. Do not read the list aloud as a
 checklist; ask what is actually unclear.
 

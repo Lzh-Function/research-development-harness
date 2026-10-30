@@ -40,6 +40,16 @@ So a checkpoint is not only a record for the next session — it is how the
 work's phase becomes visible at all. An experiment that never gets a
 `--phase validating` checkpoint keeps reporting `IN_PROGRESS` while it runs.
 
+## Discussion checkpoints (before the Design Gate)
+
+For a large theme whose direction is still being decided with the researcher
+(`workflows/scope.md`, step 0), record each settled point with
+`--phase discussing --issue <n>`. It needs no branch or Draft PR. The sections
+are the same; "Important Decisions" holds what the researcher decided,
+"Remaining" holds the open points, and "Next Action" names the next point to
+discuss. This phase is the one place where a checkpoint is a running record of
+the discussion rather than a resume point, so one per settled topic is right.
+
 ## Content test
 
 The checkpoint is good enough if a new session, reading only the Work Issue,

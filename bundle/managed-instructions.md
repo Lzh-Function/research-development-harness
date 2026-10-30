@@ -23,6 +23,9 @@ plain lead sentence plus tables (see `policy/records.md`, "Writing for the reade
   definitions of data/labels/metrics, major architecture, significant scope or
   cost, or evidence interpretation need a human decision — and at every
   explicit Human Gate.
+- For a large, open-ended theme, settle the direction with the researcher
+  first (`checkpoint --phase discussing`); take the Design Gate only after
+  they say the discussion is done.
 - Record meaningful checkpoints (`rh record checkpoint`), not per-commit
   diaries.
 - Implementation completion is not a scientific conclusion.
