@@ -87,12 +87,30 @@ small table, one row per step:
   the first filter"), with the path in Provenance, not the path alone.
 - One idea per sentence; avoid stacked compound nouns and long chains of
   clauses.
+- Do not use stiff academic terms that researchers do not use day to day
+  (for example 反実仮想 / 反事実, 交絡 is fine only when spelled out once as
+  "別の理由で同じ結果になりうる点"). Say what was done instead: not "a
+  counterfactual" but "replaced this one input with a typical value and looked
+  at how the prediction changed". If a term is needed, explain it in a phrase
+  the first time.
 - Say each thing once. Details that only a few readers need go behind a link
   or into an artifact, not into the body.
 - A table has at most about seven rows and six columns; split it otherwise.
 
 The test: could a colleague from another sub-field read the body once, from
 top to bottom, and say what was done and what was found?
+
+**Check before posting (mandatory).** Records are append-only, so unnatural
+Japanese cannot be fixed afterwards. Save every text you are about to post to a
+file first (`--body-file`), run the `yomiyasu` lint on it
+(`python3 ~/.claude/skills/yomiyasu/scripts/yomiyasu_lint.py <file>`), aim for a
+score of 100, and fix warnings (at most two rounds). The lint does not catch
+everything, so also reread the text for stock phrases that read as machine-made:
+"この記録を正とする", self-addressed questions such as "〜という読みが歪んでいないか",
+"重要なのは", "AではなくB", and tools or concepts as sentence subjects ("結果が示す").
+State what is correct instead ("元の記録と数字が違う場合は、この記録の数字が正しいです").
+This applies to Issues, Research Questions, PR bodies, every record, summaries,
+commit messages and chat replies.
 
 ## Schema evolution
 

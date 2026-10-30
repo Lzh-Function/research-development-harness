@@ -12,6 +12,11 @@ This project follows semantic versioning for `runtime_version`,
   `rh status` は `DESIGN_GATE` ではなく `DISCUSSING` を返す。Design Gateは、研究者が検討の
   終了を宣言してから取る（`workflows/scope.md` の手順0、`workflows/checkpoint.md`、
   `policy/human-gates.md`、`policy/workflow.md`、managed block）。
+- 日本語の文章は、投稿の前に`yomiyasu`のリンターで検査することを、必須の規則にした（policyの
+  "Check before posting"と、managed block）。記録は追記のみで書き換えられないため、不自然な
+  日本語を後から直せない。
+- 書き方の規則に「研究者が普段使わない堅い学術用語（反実仮想・反事実など）を使わず、
+  やったことをそのまま書く」を追加した（policy と managed block）。
 - `rh ready` の Provenance 検査は、見出し `Provenance` に加えて `出所` も認識する。
   記録を日本語で書くようにしたため、見出しを訳しただけで検査に落ちる事故が起きた。
   記録は追記のみで書き換えられないので、規則側で受けるようにした。
