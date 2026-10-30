@@ -7,6 +7,11 @@ This project follows semantic versioning for `runtime_version`,
 ## [Unreleased]
 
 ### Changed
+- 日本語の検査に `natural-japanese` を足し、`yomiyasu` との役割を書き分けた。
+  書く・直すあいだは `natural-japanese` の工程に従い、`calques.py` で英語の逐語訳を、
+  `newfacts.py` で元の文書にない数値・固有名詞・英字の語を洗い出す。後者は、記録が
+  追記のみで取り消せないため特に効く。投稿の直前は従来どおり `yomiyasu` のリンターにかける
+  （`policy/records.md` の "Check the Japanese before posting" と managed block）。
 - Knowledge Gate（Gate D）の質問を8問から6問に組み直した。「検証が保証すること／しないこと」と
   「証拠から言えること／言えないこと」は互いに重複し、どちらもGate Cの
   "What this supports / What this does NOT establish" の焼き直しだった。「もともとの研究上の

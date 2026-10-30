@@ -100,15 +100,39 @@ small table, one row per step:
 The test: could a colleague from another sub-field read the body once, from
 top to bottom, and say what was done and what was found?
 
-**Check before posting (mandatory).** Records are append-only, so unnatural
-Japanese cannot be fixed afterwards. Save every text you are about to post to a
-file first (`--body-file`), run the `yomiyasu` lint on it
-(`python3 ~/.claude/skills/yomiyasu/scripts/yomiyasu_lint.py <file>`), aim for a
-score of 100, and fix warnings (at most two rounds). The lint does not catch
-everything, so also reread the text for stock phrases that read as machine-made:
-"この記録を正とする", self-addressed questions such as "〜という読みが歪んでいないか",
-"重要なのは", "AではなくB", and tools or concepts as sentence subjects ("結果が示す").
-State what is correct instead ("元の記録と数字が違う場合は、この記録の数字が正しいです").
+**Check the Japanese before posting (mandatory).** Records are append-only, so
+unnatural Japanese cannot be fixed afterwards. Two skills do different jobs and
+both apply.
+
+*While writing or revising*, work through the `natural-japanese` skill. Its
+paragraph-by-paragraph check finds phrasing a reader cannot resolve, and two of
+its scripts find what rereading does not:
+
+```bash
+uv run ~/.claude/skills/natural-japanese/scripts/calques.py <file>
+uv run ~/.claude/skills/natural-japanese/scripts/newfacts.py <before> <after>
+```
+
+The first lists verbs and nouns that are word-for-word translations of English.
+The second lists numbers, proper nouns and Latin-script terms that appear only
+in the revised text; it matters most here, because a fact the agent invented
+cannot be withdrawn once the record is posted.
+
+*Right before posting*, save the text to a file (`--body-file`) and run the
+`yomiyasu` lint:
+
+```bash
+python3 ~/.claude/skills/yomiyasu/scripts/yomiyasu_lint.py <file>
+```
+
+Aim for a score of 100 and fix the warnings, at most two rounds.
+
+Neither tool catches everything, so also reread the text for stock phrases that
+read as machine-made: "この記録を正とする", self-addressed questions such as
+"〜という読みが歪んでいないか", "重要なのは", "AではなくB", and tools or concepts as
+sentence subjects ("結果が示す"). State what is correct instead ("元の記録と数字が
+違う場合は、この記録の数字が正しいです").
+
 This applies to Issues, Research Questions, PR bodies, every record, summaries,
 commit messages and chat replies.
 

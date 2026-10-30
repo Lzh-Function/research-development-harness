@@ -14,10 +14,10 @@ history.** Start with:
 
 **Write Work Issues, Research Questions, PR bodies, and records in Japanese,
 for a cold reader: steps as what / on which data / how / output, results as a
-plain lead sentence plus tables, no stiff jargon such as 反実仮想. Before posting,
-save the text to a file and check it with the `yomiyasu` lint
-(`~/.claude/skills/yomiyasu/scripts/yomiyasu_lint.py`); records cannot be edited
-afterwards. See `policy/records.md`, "Writing for the reader".**
+plain lead sentence plus tables, no stiff jargon such as 反実仮想. Work through the
+`natural-japanese` skill while writing, and check the saved text with the
+`yomiyasu` lint before posting; records cannot be edited afterwards. See
+`policy/records.md`, "Check the Japanese before posting".**
 
 - Scope medium/high-impact new work before implementing it.
 - Do not interrupt the researcher for routine implementation details
