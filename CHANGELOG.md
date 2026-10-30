@@ -7,6 +7,14 @@ This project follows semantic versioning for `runtime_version`,
 ## [Unreleased]
 
 ### Changed
+- Knowledge Gate（Gate D）の質問を8問から6問に組み直した。「検証が保証すること／しないこと」と
+  「証拠から言えること／言えないこと」は互いに重複し、どちらもGate Cの
+  "What this supports / What this does NOT establish" の焼き直しだった。「もともとの研究上の
+  問いは何か」はWork Issueに書いてあり、暗唱を求めていた。この3問を落とし、「見出しだけ読んだ人が
+  誤解しそうなこと」と「結論を見直す条件」に差し替えた。あわせて、Gate Dが何を確かめる門なのか
+  （sessionの外へ持ち出せるか。Gate Cの再演ではない）と、Gate Aにしかなかった運用指示
+  （チェックリストとして読み上げず、理解が示されたら早く切り上げる）を足した
+  （`policy/human-gates.md`）。
 - 大きなテーマは、Design Gateの前に、研究者との会話で方向性を決める段階を置けるようにした。
   `rh record checkpoint --phase discussing` で論点ごとの検討をIssueに追記でき、そのあいだ
   `rh status` は `DESIGN_GATE` ではなく `DISCUSSING` を返す。Design Gateは、研究者が検討の

@@ -70,18 +70,36 @@ A negative result is a completed experiment, not a failure.
 
 *Before READY_TO_MERGE.*
 
-Check that the researcher can own this work unit:
+Gate D asks whether the researcher can carry this work out of the session:
+defend it to someone who was not there, resume it cold, and recognise later if
+it turns out to be wrong. It is not a recall test of documents that already
+exist, and it does not re-run Gate C — what the evidence supports was settled
+there.
 
-- Explain this PR in one sentence
-- What was the original research question?
-- What is the main data flow?
-- Which design decisions mattered?
-- What changed relative to the Issue?
-- What does the validation guarantee — and what does it not?
-- What can be claimed from the evidence, and what cannot?
-- What is the next thing to investigate?
+Draw each question from this work unit's own records: name the actual number,
+the actual deviation, the actual decision. Asking the generic form invites a
+generic answer.
 
-Never quiz on function names or line numbers.
+- **One sentence.** What does this work unit do, said to a colleague who was
+  not there?
+- **One number, traced.** Take a headline number: which data produced it, what
+  was run on it, how was it reduced to that figure? For a work unit with
+  no numbers, trace the behaviour that changed instead.
+- **Load-bearing decisions.** Which decisions would change the conclusion if
+  they had gone the other way?
+- **Drift.** What changed relative to the Work Issue, and where was each change
+  decided?
+- **Misreading.** What would someone wrongly conclude from reading only the
+  headline?
+- **Next.** What is the next thing to do, and what observation would make you
+  revisit this conclusion?
+
+Roughly 3–4 of these for medium-risk work, all six for high. Stop early once
+ownership is demonstrated. Do not read the list aloud as a checklist; ask what
+is actually unclear.
+
+Never quiz on function names or line numbers, and never ask the researcher to
+recite something they could read off the Issue.
 
 ## Repair loop
 
